@@ -1,0 +1,51 @@
+{
+  "Database": {
+    "License": {"Name": "ODC Open Database License", "Shortcut": "ODC-ODbL", "Link": "https://opendatacommons.org/licenses/odbl/1-0/"},
+    "Publisher": "dawum.de",
+    "Last_Update": "2026-11-03T19:01:08+01:00"
+  },
+  "Parliaments": {
+    "0": {"Shortcut": "Bundestag", "Name": "Bundestag", "Election": "Bundestagswahl"},
+    "7": {"Shortcut": "Hessen", "Name": "Hessischer Landtag", "Election": "Landtagswahl in Hessen"}
+  },
+  "Institutes": {
+    "2": {"Name": "Forsa"},
+    "5": {"Name": "INSA"}
+  },
+  "Taskers": {},
+  "Methods": {},
+  "Parties": {
+    "0": {"Shortcut": "Sonstige", "Name": "sonstige Parteien"},
+    "1": {"Shortcut": "CDU/CSU", "Name": "Christlich Demokratische Union / Christlich-Soziale Union"},
+    "2": {"Shortcut": "SPD", "Name": "Sozialdemokratische Partei Deutschlands"},
+    "3": {"Shortcut": "FDP", "Name": "Freie Demokratische Partei"},
+    "4": {"Shortcut": "Grüne", "Name": "Bündnis 90/Die Grünen"},
+    "5": {"Shortcut": "Linke", "Name": "Die Linke"},
+    "7": {"Shortcut": "AfD", "Name": "Alternative für Deutschland"},
+    "8": {"Shortcut": "Freie Wähler", "Name": "Freie Wähler"},
+    "23": {"Shortcut": "BSW", "Name": "Bündnis für soziale Gerechtigkeit und wirtschaftliche Vernunft"}
+  },
+  "Surveys": {
+    "4370": {
+      "Date": "2026-11-03",
+      "Survey_Period": {"Date_Start": "2026-10-30", "Date_End": "2026-11-02"},
+      "Surveyed_Persons": "2000",
+      "Parliament_ID": "0", "Institute_ID": "5", "Tasker_ID": "4", "Method_ID": "3",
+      "Results": {"7": 28, "1": 20, "4": 15, "2": 14, "5": 10, "3": 5, "0": 4.5, "23": 3.5}
+    },
+    "4369": {
+      "Date": "2026-11-03",
+      "Survey_Period": {"Date_Start": "2026-10-27", "Date_End": "2026-11-02"},
+      "Surveyed_Persons": "",
+      "Parliament_ID": "0", "Institute_ID": "2", "Tasker_ID": "63", "Method_ID": "1",
+      "Results": {"7": 26, "1": 20, "4": 17, "2": 14, "5": 11, "8": 3, "0": 5, "3": 4}
+    },
+    "4368": {
+      "Date": "2026-10-30",
+      "Survey_Period": {"Date_Start": "2026-10-20", "Date_End": "2026-10-28"},
+      "Surveyed_Persons": "1000",
+      "Parliament_ID": "7", "Institute_ID": "2", "Tasker_ID": "63", "Method_ID": "1",
+      "Results": {"1": 35, "2": 20, "7": 18, "4": 15, "0": 12}
+    }
+  }
+}
