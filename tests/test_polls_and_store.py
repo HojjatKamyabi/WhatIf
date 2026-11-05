@@ -4,8 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from whatif.polls import PARTIES, parse_dawum
-from whatif.store import MissingDataError, fetch_dawum, latest_dawum
+from whatif.adapters import fetch, latest
+from whatif.polls import DAWUM, PARTIES, parse_dawum
+from whatif.store import MissingDataError
 
 SAMPLE = Path(__file__).parent / "fixtures" / "dawum_sample.json"
 
@@ -43,9 +44,9 @@ def test_field_end_date_and_missing_sample_size():
 
 def test_fetch_records_provenance_and_is_read_back_offline(tmp_path):
     raw = SAMPLE.read_bytes()
-    saved = fetch_dawum(tmp_path, fetch=lambda url: raw)
+    saved = fetch(DAWUM, tmp_path, download=lambda url: raw)
 
-    loaded = latest_dawum(tmp_path)
+    loaded = latest(DAWUM, tmp_path)
     assert loaded.path == saved.path
     assert loaded.load() == sample_database()
     assert loaded.metadata["licence"] == "ODC-ODbL"
@@ -56,4 +57,4 @@ def test_fetch_records_provenance_and_is_read_back_offline(tmp_path):
 
 def test_missing_store_is_reported(tmp_path):
     with pytest.raises(MissingDataError):
-        latest_dawum(tmp_path)
+        latest(DAWUM, tmp_path)

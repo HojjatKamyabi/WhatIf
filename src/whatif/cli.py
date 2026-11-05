@@ -9,10 +9,13 @@ from pathlib import Path
 
 from whatif.backtest import BacktestConfig, run_backtest
 from whatif.baselines import NaiveBaseline, StatisticalBaseline
+from whatif.population import build_synthetic_population, fit_report
 from whatif.poll_average import PollAverage, week_of, weekly_poll_average
-from whatif.polls import PARTIES, parse_dawum
+from whatif.adapters import LicenceNotRecordedError, fetch, latest
+from whatif.elections import ELECTIONS, election_before
+from whatif.polls import DAWUM, PARTIES, parse_dawum
 from whatif.results import save_result
-from whatif.store import MissingDataError, fetch_dawum, latest_dawum
+from whatif.store import MissingDataError
 
 
 def parse_week(text: str) -> date:
@@ -30,6 +33,17 @@ def main(argv: list[str] | None = None) -> int:
 
     commands.add_parser("fetch-polls", help="download national polls from DAWUM into the data store")
 
+    commands.add_parser(
+        "fetch-elections", help="download federal election results and Constituency structural data"
+    )
+
+    population = commands.add_parser(
+        "population", help="build the Synthetic Population for a start week and print its fit report"
+    )
+    population.add_argument("--start", type=parse_week, required=True, help="start week, e.g. 2025-W10")
+    population.add_argument("--scale", type=int, default=1000, help="eligible voters per Voter (default 1000)")
+    population.add_argument("--seed", type=int, default=0)
+
     show = commands.add_parser("poll-average", help="print the weekly Poll Average")
     show.add_argument("--last", type=int, default=10, help="number of most recent weeks to show")
 
@@ -43,21 +57,40 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "fetch-polls":
-            snapshot = fetch_dawum(args.data_dir)
+            snapshot = fetch(DAWUM, args.data_dir)
             print(f"Saved {snapshot.path} ({snapshot.metadata['attribution']})")
+        elif args.command == "fetch-elections":
+            for election in ELECTIONS:
+                for adapter in (election.results, election.structure):
+                    snapshot = fetch(adapter, args.data_dir)
+                    print(f"Saved {snapshot.path}")
+        elif args.command == "population":
+            _population(args)
         elif args.command == "poll-average":
             average, _ = _load_poll_average(args.data_dir)
             _print_poll_average(average, args.last)
         elif args.command == "backtest":
             _backtest(args)
-    except MissingDataError as error:
+    except (MissingDataError, LicenceNotRecordedError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
     return 0
 
 
+def _population(args) -> None:
+    election = election_before(args.start)
+    results = election.results.parse(latest(election.results, args.data_dir).raw())
+    structure = election.structure.parse(latest(election.structure, args.data_dir).raw())
+    population = build_synthetic_population(results, structure, scale=args.scale, seed=args.seed)
+    print(
+        f"Synthetic Population for {args.start}: federal election of {election.day}, "
+        f"{len(population):,} Voters at one per {args.scale:,} eligible voters, seed {args.seed}"
+    )
+    print(fit_report(population).format())
+
+
 def _load_poll_average(data_dir: Path) -> tuple[PollAverage, str]:
-    snapshot = latest_dawum(data_dir)
+    snapshot = latest(DAWUM, data_dir)
     return weekly_poll_average(parse_dawum(snapshot.load())), snapshot.version
 
 

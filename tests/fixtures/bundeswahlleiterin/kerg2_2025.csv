@@ -1,0 +1,150 @@
+﻿(c) Die Bundeswahlleiterin, Wiesbaden 2025;;;;;;;;;;;;;;;;
+Datenlizenz Deutschland – Namensnennung – Version 2.0 (https://www.govdata.de/dl-de/by-2-0);;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;
+Ergebnisse nach Wahlkreisen;;;;;;;;;;;;;;;;
+Status:;Endgültig;;;;;;;;;;;;;;;
+Stand:;14.03.2025;10:50;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;
+Format: CSV. Trennzeichen: Semikolon. Zeichensatz: UTF-8 mit BOM;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;
+Wahlart;Wahltag;Gebietsart;Gebietsnummer;Gebietsname;UegGebietsart;UegGebietsnummer;Gruppenart;Gruppenname;Gruppenreihenfolge;Stimme;Anzahl;Prozent;VorpAnzahl;VorpProzent;DiffProzent;DiffProzentPkt;Bemerkung;Gewählt
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;System-Gruppe;Wahlberechtigte;-4;;232131;;231536;;0,256979;;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;System-Gruppe;Wählende;-3;;192882;83,091875;180112;77,790063;7,090033;5,301812;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;System-Gruppe;Ungültige;-2;1;1097;0,568742;1537;0,853358;-28,627196;-0,284616;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;System-Gruppe;Ungültige;-2;2;988;0,51223;1487;0,825597;-33,557498;-0,313367;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;System-Gruppe;Gültige;-1;1;191785;99,431258;178575;99,146642;7,397452;0,284616;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;System-Gruppe;Gültige;-1;2;191894;99,48777;178625;99,174403;7,428411;0,313367;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;SPD;1;1;28376;14,795735;38927;21,798684;-27,10458;-7,002949;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;SPD;1;2;30558;15,924417;45508;25,476837;-32,851367;-9,55242;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;CDU;2;1;50838;26,507808;41721;23,363293;21,852305;3,144515;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;CDU;2;2;47686;24,850178;36421;20,389643;30,929958;4,460535;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;GRÜNE;3;1;43298;22,576322;50231;28,128797;-13,802234;-5,552475;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;GRÜNE;3;2;30595;15,943698;33300;18,642407;-8,123123;-2,698709;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;FDP;4;1;4487;2,339599;12299;6,887302;-63,517359;-4,547703;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;FDP;4;2;7067;3,682762;19189;10,742617;-63,171609;-7,059855;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;AfD;5;1;28827;15,030894;9768;5,469971;195,116708;9,560923;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;AfD;5;2;29272;15,254255;10317;5,775787;183,725889;9,478468;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;Die Linke;6;1;10375;5,409704;6544;3,664567;58,542176;1,745137;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;Die Linke;6;2;15912;8,292078;7475;4,184745;112,869565;4,107333;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;SSW;7;1;21468;11,193785;13020;7,291054;64,884793;3,902731;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;SSW;7;2;20575;10,722065;16415;9,189643;25,342674;1,532422;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;Die PARTEI;8;1;;;;;;;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;Die PARTEI;8;2;1212;0,631599;1844;1,03233;-34,273319;-0,400732;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;FREIE WÄHLER;9;1;1547;0,806632;2324;1,301414;-33,433735;-0,494782;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;FREIE WÄHLER;9;2;1137;0,592515;1715;0,960112;-33,702624;-0,367597;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;Volt;10;1;1452;0,757098;;;;;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;Volt;10;2;1449;0,755104;403;0,225612;259,55335;0,529492;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;MLPD;11;1;;;;;;;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;MLPD;11;2;53;0,027619;12;0,006718;341,666667;0,020901;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;BÜNDNIS DEUTSCHLAND;12;1;646;0,336836;;;;;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;BÜNDNIS DEUTSCHLAND;12;2;328;0,170928;;;;;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;BSW;13;1;;;;;;;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;BSW;13;2;6050;3,152782;;;;;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Einzelbewerber/Wählergruppe;EB:Krüger-Winands;14;1;471;0,245588;;;;;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Einzelbewerber/Wählergruppe;EB:Krüger-Winands;14;2;;;;;;;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;dieBasis;15;1;;;3357;1,879882;;-1,879882;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;dieBasis;15;2;;;2866;1,604479;;-1,604479;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;Team Todenhöfer;16;1;;;;;;;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;Team Todenhöfer;16;2;;;318;0,178027;;-0,178027;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;ÖDP;17;1;;;;;;;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;ÖDP;17;2;;;132;0,073898;;-0,073898;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;PdH;18;1;;;;;;;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;PdH;18;2;;;157;0,087894;;-0,087894;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;Tierschutzpartei;19;1;;;;;;;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;Partei;Tierschutzpartei;19;2;;;1990;1,114066;;-1,114066;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;System-Gruppe;Übrige;1000;1;;;384;0,215036;;-0,215036;;–
+BT;23.02.2025;Wahlkreis;001;Flensburg – Schleswig;LAND;01;System-Gruppe;Übrige;1000;2;;;563;0,315185;;-0,315185;;–
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;System-Gruppe;Wahlberechtigte;-4;;186019;;188267;;-1,194049;;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;System-Gruppe;Wählende;-3;;153755;82,655535;145387;77,223836;5,755673;5,431699;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;System-Gruppe;Ungültige;-2;1;1038;0,6751;1337;0,919615;-22,3635;-0,244515;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;System-Gruppe;Ungültige;-2;2;840;0,546324;1242;0,854272;-32,36715;-0,307948;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;System-Gruppe;Gültige;-1;1;152717;99,3249;144050;99,080385;6,016661;0,244515;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;System-Gruppe;Gültige;-1;2;152915;99,453676;144145;99,145728;6,084151;0,307948;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;SPD;1;1;31169;20,409647;40026;27,786185;-22,128117;-7,376539;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;SPD;1;2;26639;17,420789;37926;26,311006;-29,760586;-8,890217;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;CDU;2;1;49866;32,652553;43745;30,367928;13,992456;2,284626;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;CDU;2;2;45302;29,625609;35511;24,63561;27,571738;4,989999;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;GRÜNE;3;1;16628;10,888113;20611;14,308226;-19,324632;-3,420113;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;GRÜNE;3;2;18764;12,270869;22588;15,670332;-16,929343;-3,399463;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;FDP;4;1;5750;3,765134;13958;9,689691;-58,804986;-5,924557;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;FDP;4;2;7618;4,981853;18350;12,730237;-58,485014;-7,748384;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;AfD;5;1;24474;16,025721;8274;5,743839;195,794054;10,281882;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;AfD;5;2;24564;16,063826;8798;6,103576;179,199818;9,96025;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;Die Linke;6;1;7920;5,186063;4060;2,818466;95,073892;2,367597;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;Die Linke;6;2;9442;6,174672;4437;3,07815;112,801442;3,096522;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;SSW;7;1;14254;9,333604;9410;6,532454;51,477152;2,80115;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;SSW;7;2;12264;8,020142;9516;6,601686;28,87768;1,418456;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;Die PARTEI;8;1;;;;;;;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;Die PARTEI;8;2;1067;0,697773;1322;0,917132;-19,288956;-0,219359;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;FREIE WÄHLER;9;1;1484;0,971732;1510;1,048247;-1,721854;-0,076515;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;FREIE WÄHLER;9;2;1099;0,7187;1081;0,749939;1,665125;-0,031239;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;Volt;10;1;1172;0,767433;;;;;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;Volt;10;2;1023;0,668999;237;0,164418;331,64557;0,504581;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;MLPD;11;1;;;;;;;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;MLPD;11;2;48;0,03139;26;0,018037;84,615385;0,013353;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;BÜNDNIS DEUTSCHLAND;12;1;;;;;;;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;BÜNDNIS DEUTSCHLAND;12;2;178;0,116405;;;;;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;BSW;13;1;;;;;;;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;BSW;13;2;4907;3,208972;;;;;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;dieBasis;14;1;;;2254;1,564734;;-1,564734;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;dieBasis;14;2;;;1836;1,273717;;-1,273717;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;Team Todenhöfer;15;1;;;;;;;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;Team Todenhöfer;15;2;;;239;0,165805;;-0,165805;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;ÖDP;16;1;;;;;;;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;ÖDP;16;2;;;121;0,083943;;-0,083943;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;PdH;17;1;;;;;;;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;PdH;17;2;;;130;0,090187;;-0,090187;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;Tierschutzpartei;18;1;;;;;;;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;Partei;Tierschutzpartei;18;2;;;1604;1,112768;;-1,112768;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;System-Gruppe;Übrige;1000;1;;;202;0,140229;;-0,140229;;CDU
+BT;23.02.2025;Wahlkreis;002;Nordfriesland – Dithmarschen Nord;LAND;01;System-Gruppe;Übrige;1000;2;;;423;0,293455;;-0,293455;;CDU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;System-Gruppe;Wahlberechtigte;-4;;168462;;168656;;-0,115027;;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;System-Gruppe;Wählende;-3;;137701;81,740096;129441;76,74853;6,381286;4,991566;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;System-Gruppe;Ungültige;-2;1;734;0,533039;880;0,679846;-16,590909;-0,146807;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;System-Gruppe;Ungültige;-2;2;451;0,327521;681;0,526108;-33,773862;-0,198587;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;System-Gruppe;Gültige;-1;1;136967;99,466961;128561;99,320154;6,53853;0,146807;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;System-Gruppe;Gültige;-1;2;137250;99,672479;128760;99,473892;6,593663;0,198587;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;CSU;1;1;60164;43,925909;55693;43,320292;8,027939;0,605618;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;CSU;1;2;54392;39,629872;44060;34,218701;23,449841;5,411171;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;SPD;2;1;11870;8,666321;14620;11,372034;-18,80985;-2,705712;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;SPD;2;2;11493;8,37377;18309;14,219478;-37,227593;-5,845708;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;GRÜNE;3;1;10399;7,59234;11145;8,669036;-6,693585;-1,076697;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;GRÜNE;3;2;10712;7,804736;12248;9,512271;-12,540823;-1,707535;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;FDP;4;1;3994;2,916031;9245;7,191139;-56,798269;-4,275108;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;FDP;4;2;4887;3,560656;13298;10,327742;-63,250113;-6,767086;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;AfD;5;1;32269;23,55969;14220;11,060897;126,926864;12,498792;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;AfD;5;2;33186;24,179235;13940;10,826344;138,063128;13,352891;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;FREIE WÄHLER;6;1;8637;6,305899;13049;10,150046;-33,81102;-3,844147;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;FREIE WÄHLER;6;2;7504;5,467395;14857;11,538521;-49,491822;-6,071126;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;Die Linke;7;1;5867;4,283514;3155;2,454088;85,958796;1,829426;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;Die Linke;7;2;6212;4,526047;2769;2,150513;124,340917;2,375535;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;dieBasis;8;1;1580;1,153563;3509;2,729444;-54,972927;-1,575881;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;dieBasis;8;2;800;0,582878;3003;2,332246;-73,359973;-1,749368;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;Tierschutzpartei;9;1;;;;;;;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;Tierschutzpartei;9;2;1053;0,767213;1396;1,084188;-24,570201;-0,316975;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;Die PARTEI;10;1;;;;;;;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;Die PARTEI;10;2;501;0,365027;872;0,677229;-42,545872;-0,312202;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;ÖDP;11;1;2187;1,596735;2509;1,951603;-12,833798;-0,354868;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;ÖDP;11;2;843;0,614208;1302;1,011184;-35,253456;-0,396976;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;BP;12;1;;;1416;1,101423;;-1,101423;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;BP;12;2;339;0,246995;881;0,684219;-61,520999;-0,437224;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;Volt;13;1;;;;;;;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;Volt;13;2;550;0,400729;196;0,152221;180,612245;0,248507;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;PdH;14;1;;;;;;;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;PdH;14;2;88;0,064117;94;0,073004;-6,382979;-0,008887;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;MLPD;15;1;;;;;;;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;MLPD;15;2;28;0,020401;19;0,014756;47,368421;0,005645;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;BÜNDNIS DEUTSCHLAND;16;1;;;;;;;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;BÜNDNIS DEUTSCHLAND;16;2;101;0,073588;;;;;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;BSW;17;1;;;;;;;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;BSW;17;2;4561;3,323133;;;;;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;Bündnis C;18;1;;;;;;;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;Bündnis C;18;2;;;55;0,042715;;-0,042715;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;Team Todenhöfer;19;1;;;;;;;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;Team Todenhöfer;19;2;;;334;0,259397;;-0,259397;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;Verjüngungsforschung;20;1;;;;;;;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;Verjüngungsforschung;20;2;;;165;0,128145;;-0,128145;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;PIRATEN;21;1;;;;;;;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;Partei;PIRATEN;21;2;;;389;0,302112;;-0,302112;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;System-Gruppe;Übrige;1000;1;;;0;0;;0;;CSU
+BT;23.02.2025;Wahlkreis;211;Altötting;LAND;09;System-Gruppe;Übrige;1000;2;;;573;0,445014;;-0,445014;;CSU

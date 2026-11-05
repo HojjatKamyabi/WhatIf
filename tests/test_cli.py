@@ -53,3 +53,30 @@ def test_poll_average_command_shows_parties(tmp_path, capsys):
 def test_missing_data_is_an_error_not_a_crash(tmp_path, capsys):
     assert main(["--data-dir", str(tmp_path / "empty"), "backtest", "--start", "2024-W15"]) == 1
     assert "fetch-polls" in capsys.readouterr().err
+
+
+def write_election_store(data_dir: Path, year: int = 2025) -> None:
+    """Saved results and structural data for one election, as a fetch would have left them."""
+    fixtures = Path(__file__).parent / "fixtures" / "bundeswahlleiterin"
+    for name, fixture in (
+        (f"election-results-{year}", f"kerg2_{year}.csv"),
+        (f"constituency-structure-{year}", f"strukturdaten_{year}.csv"),
+    ):
+        store = data_dir / name
+        store.mkdir(parents=True)
+        (store / "20260101T000000Z.csv").write_bytes((fixtures / fixture).read_bytes())
+        (store / "20260101T000000Z.meta.json").write_text(json.dumps({"licence": "recorded"}))
+
+
+def test_population_prints_the_fit_report_for_the_election_before_the_start_week(tmp_path, capsys):
+    write_election_store(tmp_path)
+    assert main(["--data-dir", str(tmp_path), "population", "--start", "2025-W40", "--scale", "1000"]) == 0
+    out = capsys.readouterr().out
+    assert "2025-02-23" in out
+    assert "Flensburg – Schleswig" in out
+    assert "party gap" in out
+
+
+def test_population_without_election_data_says_what_to_fetch(tmp_path, capsys):
+    assert main(["--data-dir", str(tmp_path), "population", "--start", "2025-W40"]) == 1
+    assert "fetch-elections" in capsys.readouterr().err

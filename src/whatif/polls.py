@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
+
+from whatif.adapters import Adapter, Licence
 
 # The fixed party list every Poll Average is expressed on. Any other party counts as Others.
 PARTIES: tuple[str, ...] = ("CDU/CSU", "AfD", "SPD", "Greens", "Left", "BSW", "FDP", "Others")
@@ -86,3 +90,25 @@ def _map_shares(results: dict[str, float]) -> dict[str, float]:
     if total <= 0:
         raise ValueError(f"Poll has no positive results: {results}")
     return {party: 100.0 * value / total for party, value in shares.items()}
+
+
+def _describe_dawum(raw: bytes) -> dict:
+    database = json.loads(raw.decode("utf-8"))
+    return {"source_last_update": database.get("Database", {}).get("Last_Update")}
+
+
+DAWUM = Adapter(
+    name="dawum",
+    source="https://api.dawum.de/",
+    licence=Licence(
+        name="ODC-ODbL",
+        url="https://opendatacommons.org/licenses/odbl/1-0/",
+        checked_on=date(2026, 11, 3),
+        attribution="Daten von dawum.de (Open Database License (ODbL))",
+    ),
+    record_type=Poll,
+    parse=lambda raw: parse_dawum(json.loads(raw.decode("utf-8"))),
+    fixture=Path(__file__).parents[2] / "tests" / "fixtures" / "dawum_sample.json",
+    describe=_describe_dawum,
+    fetch_command="fetch-polls",
+)
