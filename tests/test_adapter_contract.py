@@ -92,8 +92,16 @@ def test_adapter_meets_the_contract(adapter, tmp_path):
             fetch(adapter, tmp_path, download=lambda url: pytest.fail("fetched without a licence"))
         return
 
-    fetch(adapter, tmp_path, download=lambda url: adapter.fixture.read_bytes())
+    if adapter.collect is None:
+        fetch(adapter, tmp_path, download=lambda url: adapter.fixture.read_bytes())
+    else:  # fetched by date range: the fixture stands in for what collecting a range stores
+        with pytest.raises(ValueError, match="date range"):
+            fetch(adapter, tmp_path, download=lambda url: pytest.fail("fetched without a range"))
+        stand_in = replace(adapter, collect=lambda download, start, end: adapter.fixture.read_bytes())
+        fetch(stand_in, tmp_path, start=date(2025, 2, 1), end=date(2025, 2, 28))
     snapshot = latest(adapter, tmp_path)
     assert adapter.parse(snapshot.raw()) == records
     for key in ("source", "licence", "licence_url", "licence_checked_on", "downloaded_at"):
         assert snapshot.metadata[key], f"snapshot metadata records {key}"
+    if adapter.collect is not None:
+        assert (snapshot.metadata["range_start"], snapshot.metadata["range_end"]) == ("2025-02-01", "2025-02-28")

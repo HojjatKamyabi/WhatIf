@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
+from whatif.boundary import WeeklyBoundary
+from whatif.events import TOPICS
 from whatif.polls import PARTIES
-from whatif.population import SyntheticPopulation
+from whatif.population import ADULT_AGE_BANDS, SyntheticPopulation
+
+# How much each adult age band cares about each topic (economy, migration, climate, security,
+# social, other), relative to 1. A first guess by the researcher, to be tuned only in the
+# Calibration Period. The economy weight is further scaled by unemployment where the Voter lives.
+DEFAULT_TOPIC_PRIORITIES: dict[str, tuple[float, ...]] = {
+    "18-24": (1.0, 0.8, 1.6, 0.8, 0.8, 1.0),
+    "25-34": (1.2, 0.9, 1.3, 0.8, 0.8, 1.0),
+    "35-59": (1.3, 1.0, 1.0, 0.9, 0.8, 1.0),
+    "60-74": (1.0, 1.2, 0.8, 1.1, 1.2, 1.0),
+    "75+": (0.8, 1.2, 0.7, 1.2, 1.4, 1.0),
+}
 
 
 @dataclass(frozen=True)
@@ -19,6 +32,17 @@ class TwinParameters:
     same_age_share: float = 0.5  # of the neighbours in the Voter's own Constituency, share in the same age band
     influence: float = 0.1  # how far each week a Voter's preference moves towards their neighbours' average
     poll_sample: int = 2000  # respondents in the weekly poll that measures the Twin
+    # The economy: share of a Voter's support for the governing parties that moves to the others
+    # per point rise (or back, per point fall). Inflation weighs more on Voters in poorer
+    # Constituencies, unemployment on Voters where it is already high (both relative to the average).
+    inflation_reaction: float = 0.01
+    unemployment_reaction: float = 0.03
+    # Events: share of a Voter's support for a party that leaves it per unit of Event shock on a
+    # topic the Voter gives priority 1, at usual attention. Good news draws support the other way.
+    event_reaction: float = 0.002
+    event_baseline_weeks: int = 8  # weeks before the start that set each party's usual coverage
+    max_attention: float = 5.0  # attention above this many times the usual level counts as this
+    topic_priorities: dict[str, tuple[float, ...]] = field(default_factory=lambda: dict(DEFAULT_TOPIC_PRIORITIES))
 
 
 @dataclass(frozen=True)
@@ -27,6 +51,7 @@ class TwinRun:
 
     start: np.ndarray  # national shares (%) before the first step
     start_by_constituency: dict[int, dict[str, float]]  # shares (%) per Constituency before the first step
+    end_by_constituency: dict[int, dict[str, float]]  # shares (%) per Constituency after the last step
     shares: np.ndarray  # national shares (%) after each weekly step: [week][party]
     disagreement: list[float]  # Neighbour Disagreement (points) at the start and after each week
 
@@ -36,34 +61,90 @@ class Twin:
 
     name = "twin"
 
-    def __init__(self, population: SyntheticPopulation, parameters: TwinParameters | None = None, seed: int = 0):
+    def __init__(
+        self,
+        population: SyntheticPopulation,
+        parameters: TwinParameters | None = None,
+        seed: int = 0,
+        boundary: WeeklyBoundary | None = None,
+    ):
         self.parameters = parameters or TwinParameters()
+        self.boundary = boundary
         self._voters = population.voters()
         self._neighbours = _network(self._voters, self.parameters, np.random.default_rng(seed))
+        voters = self._voters
+        # Each Voter's own circumstances, relative to the average Voter.
+        self._unemployment_weight = voters.unemployment_rate / voters.unemployment_rate.mean()
+        self._inflation_weight = voters.disposable_income.mean() / voters.disposable_income
+        priorities = np.array([self.parameters.topic_priorities[band] for band in ADULT_AGE_BANDS], dtype=float)
+        self._topic_weight = priorities[voters.age]
+        self._topic_weight[:, TOPICS.index("economy")] *= self._unemployment_weight
 
     def run(self, latest: np.ndarray, horizon: int) -> TwinRun:
         """Start from the election map swung to `latest` (national %), then step `horizon` weeks."""
+        if self.boundary is not None and horizon > self.boundary.horizon:
+            raise ValueError(f"The Boundary covers {self.boundary.horizon} weeks, not the {horizon} asked for.")
         preferences = self._start(np.asarray(latest, dtype=float) / np.sum(latest))
         start = 100 * self._national(preferences)
         start_by_constituency = self._by_constituency(preferences)
         shares, disagreement = [], [self._disagreement(preferences)]
-        for _ in range(horizon):
-            preferences = self._step(preferences)
+        for week in range(horizon):
+            preferences = self._step(preferences, week)
             shares.append(100 * self._national(preferences))
             disagreement.append(self._disagreement(preferences))
         return TwinRun(
             start=start,
             start_by_constituency=start_by_constituency,
+            end_by_constituency=self._by_constituency(preferences),
             shares=np.array(shares).reshape(horizon, len(PARTIES)),
             disagreement=disagreement,
         )
 
     # --- Voter rules ------------------------------------------------------------------------
 
-    def _step(self, preferences: np.ndarray) -> np.ndarray:
-        """One week: every Voter moves part of the way towards their neighbours' average."""
+    def _step(self, preferences: np.ndarray, week: int) -> np.ndarray:
+        """One week: social influence, then the economy, then the week's Events."""
         influence = self.parameters.influence
-        return (1.0 - influence) * preferences + influence * preferences[self._neighbours].mean(axis=1)
+        preferences = (1.0 - influence) * preferences + influence * preferences[self._neighbours].mean(axis=1)
+        if self.boundary is not None:
+            preferences = self._economy(preferences, week)
+            preferences = self._events(preferences, week)
+        return preferences
+
+    def _economy(self, preferences: np.ndarray, week: int) -> np.ndarray:
+        """Hard times move support from the governing parties to the others; better times move it back."""
+        change = self.boundary.economy[week + 1] - self.boundary.economy[week]  # inflation, unemployment
+        pressure = (
+            self.parameters.inflation_reaction * change[0] * self._inflation_weight
+            + self.parameters.unemployment_reaction * change[1] * self._unemployment_weight
+        )
+        if not pressure.any():
+            return preferences
+        governing = np.isin(PARTIES, list(self.boundary.government[week]))
+        national = self._national(preferences)
+        preferences = _move(preferences, governing, np.clip(pressure, 0.0, 1.0), national)
+        return _move(preferences, ~governing, np.clip(-pressure, 0.0, 1.0), national)
+
+    def _events(self, preferences: np.ndarray, week: int) -> np.ndarray:
+        """Bad news about a party moves Voters away from it, good news towards it.
+
+        Each Voter weighs the news by how much they care about its topic, and by how much
+        attention the party and the topic get that week.
+        """
+        cap = self.parameters.max_attention
+        party_attention = np.clip(self.boundary.party_attention[week], 0.0, cap)
+        topic_attention = np.clip(self.boundary.topic_attention[week], 0.0, cap)
+        weighted_topics = self._topic_weight * topic_attention  # [voter][topic]
+        for party in range(len(PARTIES) - 1):  # Others is no party: no Events, no attention
+            shock = self.boundary.event_shock[week, party]
+            if not shock.any():
+                continue
+            reaction = self.parameters.event_reaction * party_attention[party] * (weighted_topics @ shock)
+            this_party = np.arange(len(PARTIES)) == party
+            national = self._national(preferences)
+            preferences = _move(preferences, this_party, np.clip(reaction, 0.0, 1.0), national)
+            preferences = _move(preferences, ~this_party, np.clip(-reaction, 0.0, 1.0), national)
+        return preferences
 
     def _disagreement(self, preferences: np.ndarray) -> float:
         """Neighbour Disagreement: how far, on average, a Voter's preference is from their neighbours'.
@@ -158,3 +239,20 @@ def _network(voters, parameters: TwinParameters, rng: np.random.Generator) -> np
         members = np.flatnonzero(voters.land == land)
         neighbours[members, degree - from_land :] = rng.choice(members, size=(len(members), from_land))
     return neighbours
+
+
+def _move(preferences: np.ndarray, losing: np.ndarray, rate: np.ndarray, national: np.ndarray) -> np.ndarray:
+    """Move `rate` (per Voter) of each Voter's support for the `losing` parties to the other parties.
+
+    It goes to the other parties in proportion to the Voter's own support for them; a Voter who
+    supports none of them follows the national shares instead.
+    """
+    if not rate.any():
+        return preferences
+    moved = preferences * losing * rate[:, None]
+    gaining = preferences * ~losing
+    total = gaining.sum(axis=1, keepdims=True)
+    fallback = np.where(~losing, national, 0.0)
+    fallback = fallback / fallback.sum() if fallback.sum() > 0 else (~losing) / (~losing).sum()
+    share = np.where(total > 1e-12, gaining / np.where(total > 1e-12, total, 1.0), fallback)
+    return preferences - moved + moved.sum(axis=1, keepdims=True) * share

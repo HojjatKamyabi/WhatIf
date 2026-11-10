@@ -5,15 +5,18 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import asdict
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from whatif.backtest import BacktestConfig, run_backtest
 from whatif.baselines import NaiveBaseline, StatisticalBaseline
 from whatif.population import build_synthetic_population, fit_report
 from whatif.poll_average import PollAverage, week_of, weekly_poll_average
-from whatif.adapters import LicenceNotRecordedError, fetch, latest
+from whatif.adapters import LicenceNotRecordedError, fetch, latest, snapshots
+from whatif.boundary import build_boundary
+from whatif.economy import INFLATION, UNEMPLOYMENT, Economy
 from whatif.elections import ELECTIONS, election_before
+from whatif.events import GDELT, PAGEVIEWS, event_log, page_view_log
 from whatif.polls import DAWUM, PARTIES, parse_dawum
 from whatif.results import save_result
 from whatif.twin import Twin, TwinParameters
@@ -28,6 +31,13 @@ def parse_week(text: str) -> date:
     return week_of(date.fromisoformat(text))
 
 
+def parse_day(text: str) -> date:
+    """Accept a date (2025-03-05), or an ISO week (2025-W10) meaning its Monday."""
+    if "-W" in text.upper():
+        return parse_week(text)
+    return date.fromisoformat(text)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="whatif", description=__doc__)
     parser.add_argument("--data-dir", type=Path, default=Path("data"))
@@ -37,6 +47,20 @@ def main(argv: list[str] | None = None) -> int:
 
     commands.add_parser(
         "fetch-elections", help="download federal election results and Constituency structural data"
+    )
+
+    commands.add_parser("fetch-economy", help="download monthly inflation and unemployment for Germany")
+
+    events = commands.add_parser(
+        "fetch-events", help="download recorded Events for Germany from GDELT, by date range only"
+    )
+    events.add_argument("--start", type=parse_day, required=True, help="first day, e.g. 2025-01-06")
+    events.add_argument("--end", type=parse_day, required=True, help="last day (inclusive)")
+
+    attention = commands.add_parser("fetch-attention", help="download daily Wikipedia page views per party and topic")
+    attention.add_argument("--start", type=parse_day, default=date(2016, 1, 1), help="first day (default 2016-01-01)")
+    attention.add_argument(
+        "--end", type=parse_day, default=date.today() - timedelta(days=3), help="last day (default 3 days ago)"
     )
 
     population = commands.add_parser(
@@ -67,6 +91,22 @@ def main(argv: list[str] | None = None) -> int:
                 for adapter in (election.results, election.structure):
                     snapshot = fetch(adapter, args.data_dir)
                     print(f"Saved {snapshot.path}")
+        elif args.command == "fetch-economy":
+            for adapter in (INFLATION, UNEMPLOYMENT):
+                snapshot = fetch(adapter, args.data_dir)
+                print(f"Saved {snapshot.path} ({snapshot.metadata['attribution']})")
+        elif args.command in ("fetch-events", "fetch-attention") and args.end >= date.today() - timedelta(days=1):
+            print("error: --end must be a day that is fully published, at the latest the day before yesterday.", file=sys.stderr)
+            return 1
+        elif args.command == "fetch-events":
+            snapshot = fetch(GDELT, args.data_dir, start=args.start, end=args.end)
+            print(
+                f"Saved {snapshot.path}: {snapshot.metadata['files']} GDELT files, "
+                f"{snapshot.metadata['missing_files']} never published ({snapshot.metadata['attribution']})"
+            )
+        elif args.command == "fetch-attention":
+            snapshot = fetch(PAGEVIEWS, args.data_dir, start=args.start, end=args.end)
+            print(f"Saved {snapshot.path} ({snapshot.metadata['attribution']})")
         elif args.command == "population":
             _population(args)
         elif args.command == "poll-average":
@@ -119,7 +159,14 @@ def _backtest(args) -> None:
         seed=args.seed,
     )
     parameters = TwinParameters()
-    twin = Twin(population, parameters, seed=args.seed)
+
+    inflation, unemployment = latest(INFLATION, args.data_dir), latest(UNEMPLOYMENT, args.data_dir)
+    economy = Economy(INFLATION.parse(inflation.raw()), UNEMPLOYMENT.parse(unemployment.raw()))
+    events, views = event_log(args.data_dir), page_view_log(args.data_dir)
+    boundary = build_boundary(
+        config.start_week, config.horizon, economy, events, views, parameters.event_baseline_weeks
+    )
+    twin = Twin(population, parameters, seed=args.seed, boundary=boundary)
 
     result = run_backtest(
         average,
@@ -129,6 +176,10 @@ def _backtest(args) -> None:
             "dawum": version,
             election.results.name: results_snapshot.version,
             election.structure.name: structure_snapshot.version,
+            INFLATION.name: inflation.version,
+            UNEMPLOYMENT.name: unemployment.version,
+            GDELT.name: "+".join(s.version for s in snapshots(GDELT, args.data_dir)),
+            PAGEVIEWS.name: latest(PAGEVIEWS, args.data_dir).version,
         },
         settings={
             "twin": {

@@ -40,6 +40,8 @@ class Voters:
     age: np.ndarray  # index into ADULT_AGE_BANDS
     land: np.ndarray  # name of the Land
     turnout: np.ndarray  # starting chance of voting
+    unemployment_rate: np.ndarray  # the Constituency's unemployment rate (%)
+    disposable_income: np.ndarray  # the Constituency's disposable income (EUR per inhabitant per year)
 
 
 class SyntheticPopulation:
@@ -68,13 +70,15 @@ class SyntheticPopulation:
 
     def voters(self) -> Voters:
         turnout = {n: r.voted / r.eligible for n, r in self._results.items()}
-        land = {n: s.land for n, s in self._structure.items()}
+        facts = [self._structure[n] for n in self._constituency]
         return Voters(
             constituency=self._constituency.copy(),
             party=self._party.copy(),
             age=self._age.copy(),
-            land=np.array([land[n] for n in self._constituency]),
+            land=np.array([f.land for f in facts]),
             turnout=np.array([turnout[n] for n in self._constituency]),
+            unemployment_rate=np.array([f.unemployment_rate for f in facts]),
+            disposable_income=np.array([f.disposable_income for f in facts]),
         )
 
     def summary(self) -> dict[int, ConstituencySummary]:
