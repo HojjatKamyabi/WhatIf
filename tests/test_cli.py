@@ -29,18 +29,33 @@ def test_parse_week_accepts_iso_weeks_and_dates():
     assert parse_week("2025-03-05") == date(2025, 3, 3)
 
 
-def test_backtest_command_prints_scores_and_saves_result(tmp_path, capsys):
+def test_backtest_command_runs_the_twin_and_saves_a_self_contained_result(tmp_path, capsys):
     write_store(tmp_path / "data")
+    write_election_store(tmp_path / "data", year=2021)  # the last election before 2024-W15
     code = main([
         "--data-dir", str(tmp_path / "data"), "backtest", "--start", "2024-W15",
-        "--horizon", "6", "--runs", "50", "--results-dir", str(tmp_path / "results"),
+        "--horizon", "6", "--runs", "50", "--scale", "1000", "--results-dir", str(tmp_path / "results"),
     ])
     assert code == 0
     out = capsys.readouterr().out
-    assert "naive" in out and "statistical" in out
+    assert "naive" in out and "statistical" in out and "twin" in out
     saved = list((tmp_path / "results").glob("backtest-*.json"))
     assert len(saved) == 1
-    assert json.loads(saved[0].read_text())["data_versions"] == {"dawum": "20260101T000000Z"}
+    result = json.loads(saved[0].read_text())
+    assert result["data_versions"] == {
+        "dawum": "20260101T000000Z",
+        "election-results-2021": "20260101T000000Z",
+        "constituency-structure-2021": "20260101T000000Z",
+    }
+    twin = result["settings"]["twin"]
+    assert twin["influence"] == 0.1 and twin["poll_sample"] == 2000 and twin["degree"] == 10
+    assert twin["scale"] == 1000 and twin["election_day"] == "2021-09-26"
+
+
+def test_backtest_without_election_data_says_what_to_fetch(tmp_path, capsys):
+    write_store(tmp_path / "data")
+    assert main(["--data-dir", str(tmp_path / "data"), "backtest", "--start", "2024-W15"]) == 1
+    assert "fetch-elections" in capsys.readouterr().err
 
 
 def test_poll_average_command_shows_parties(tmp_path, capsys):

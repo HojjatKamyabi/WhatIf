@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from whatif.adapters import LicenceNotRecordedError, fetch, latest
 from whatif.elections import ELECTIONS, election_before
 from whatif.polls import DAWUM, PARTIES, parse_dawum
 from whatif.results import save_result
+from whatif.twin import Twin, TwinParameters
 from whatif.store import MissingDataError
 
 
@@ -52,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     backtest.add_argument("--horizon", type=int, default=12, help="weeks ahead (default 12)")
     backtest.add_argument("--runs", type=int, default=200)
     backtest.add_argument("--seed", type=int, default=0)
+    backtest.add_argument("--scale", type=int, default=10000, help="eligible voters per Voter (default 10000)")
     backtest.add_argument("--results-dir", type=Path, default=Path("results"))
 
     args = parser.parse_args(argv)
@@ -105,8 +108,37 @@ def _print_poll_average(average: PollAverage, last: int) -> None:
 def _backtest(args) -> None:
     average, version = _load_poll_average(args.data_dir)
     config = BacktestConfig(start_week=args.start, horizon=args.horizon, runs=args.runs, seed=args.seed)
-    forecasters = [NaiveBaseline(), StatisticalBaseline()]
-    result = run_backtest(average, config, forecasters, data_versions={"dawum": version})
+
+    election = election_before(args.start)
+    results_snapshot = latest(election.results, args.data_dir)
+    structure_snapshot = latest(election.structure, args.data_dir)
+    population = build_synthetic_population(
+        election.results.parse(results_snapshot.raw()),
+        election.structure.parse(structure_snapshot.raw()),
+        scale=args.scale,
+        seed=args.seed,
+    )
+    parameters = TwinParameters()
+    twin = Twin(population, parameters, seed=args.seed)
+
+    result = run_backtest(
+        average,
+        config,
+        [NaiveBaseline(), StatisticalBaseline(), twin],
+        data_versions={
+            "dawum": version,
+            election.results.name: results_snapshot.version,
+            election.structure.name: structure_snapshot.version,
+        },
+        settings={
+            "twin": {
+                **asdict(parameters),
+                "scale": args.scale,
+                "voters": len(population),
+                "election_day": election.day.isoformat(),
+            }
+        },
+    )
     path = save_result(result, args.results_dir)
 
     print(f"Backtest from {config.start_week}, {config.horizon} weeks, {config.runs} Runs, seed {config.seed}")

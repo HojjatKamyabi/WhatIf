@@ -31,6 +31,17 @@ class ConstituencySummary:
     unemployment_rate: float  # %
 
 
+@dataclass(frozen=True)
+class Voters:
+    """The Synthetic Population as columns, one entry per Voter, for the Twin to run on."""
+
+    constituency: np.ndarray  # Constituency number
+    party: np.ndarray  # index into PARTIES of the starting preference
+    age: np.ndarray  # index into ADULT_AGE_BANDS
+    land: np.ndarray  # name of the Land
+    turnout: np.ndarray  # starting chance of voting
+
+
 class SyntheticPopulation:
     """Voters stored column-wise: one entry per Voter in each array.
 
@@ -54,6 +65,17 @@ class SyntheticPopulation:
 
     def __len__(self) -> int:
         return len(self._constituency)
+
+    def voters(self) -> Voters:
+        turnout = {n: r.voted / r.eligible for n, r in self._results.items()}
+        land = {n: s.land for n, s in self._structure.items()}
+        return Voters(
+            constituency=self._constituency.copy(),
+            party=self._party.copy(),
+            age=self._age.copy(),
+            land=np.array([land[n] for n in self._constituency]),
+            turnout=np.array([turnout[n] for n in self._constituency]),
+        )
 
     def summary(self) -> dict[int, ConstituencySummary]:
         summaries = {}

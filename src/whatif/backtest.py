@@ -52,6 +52,7 @@ class BacktestResult:
     carried_weeks: list[date]
     scores: dict[str, ForecastScores]
     data_versions: dict[str, str] = field(default_factory=dict)
+    settings: dict[str, dict] = field(default_factory=dict)  # each forecaster's own settings, by name
 
 
 def run_backtest(
@@ -59,6 +60,7 @@ def run_backtest(
     config: BacktestConfig,
     forecasters: Sequence[Forecaster],
     data_versions: dict[str, str] | None = None,
+    settings: dict[str, dict] | None = None,
 ) -> BacktestResult:
     """Run every forecaster from the start week and score it against the real Poll Average.
 
@@ -81,6 +83,7 @@ def run_backtest(
         carried_weeks=carried,
         scores=scores,
         data_versions=dict(data_versions or {}),
+        settings=dict(settings or {}),
     )
 
 

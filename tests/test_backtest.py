@@ -116,3 +116,60 @@ def test_saved_result_is_self_contained(poll_series, tmp_path):
     assert saved["data_versions"] == {"dawum": "fixture"}
     assert saved["parties"] == list(PARTIES)
     assert saved["scores"]["naive"]["crps_mean"] == pytest.approx(result.scores["naive"].crps_mean)
+
+
+# --- The Twin as a forecaster in the Backtest ----------------------------------------------
+
+from pathlib import Path  # noqa: E402
+
+from whatif.elections import parse_results, parse_structure  # noqa: E402
+from whatif.population import build_synthetic_population  # noqa: E402
+from whatif.twin import Twin, TwinParameters  # noqa: E402
+
+ELECTION_FIXTURES = Path(__file__).parent / "fixtures" / "bundeswahlleiterin"
+
+
+def fixture_twin(seed: int = 0, **parameters) -> Twin:
+    results = parse_results((ELECTION_FIXTURES / "kerg2_2025.csv").read_bytes())
+    structure = parse_structure((ELECTION_FIXTURES / "strukturdaten_2025.csv").read_bytes())
+    population = build_synthetic_population(results, structure, scale=1000, seed=0)
+    return Twin(population, TwinParameters(**parameters), seed=seed)
+
+
+def twin_backtest(polls, twin, **config):
+    return run_backtest(
+        weekly_poll_average(polls),
+        BacktestConfig(start_week=START, **config),
+        [NaiveBaseline(), StatisticalBaseline(), twin],
+    )
+
+
+def test_the_twin_is_scored_next_to_both_baselines(poll_series):
+    result = twin_backtest(poll_series, fixture_twin(), horizon=6, runs=50)
+    assert list(result.scores) == ["naive", "statistical", "twin"]
+    assert set(result.scores["twin"].crps_by_party) == set(PARTIES)
+    assert len(result.scores["twin"].quantiles["0.5"]) == 6
+
+
+def test_the_twin_starts_from_the_latest_poll_average(poll_series):
+    average = weekly_poll_average(poll_series)
+    latest = average.shares[average.index_of(START) - 1]
+    twin = fixture_twin(influence=0.0, poll_sample=1_000_000)  # no drift, almost no sampling noise
+    median = np.array(twin_backtest(poll_series, twin, horizon=3, runs=20).scores["twin"].quantiles["0.5"])
+    assert median == pytest.approx(np.tile(latest, (3, 1)), abs=0.1)
+
+
+def test_a_smaller_weekly_poll_gives_a_wider_outcome_distribution(poll_series):
+    def width(sample: int) -> float:
+        quantiles = twin_backtest(poll_series, fixture_twin(poll_sample=sample), runs=200).scores["twin"].quantiles
+        return float(np.mean(np.array(quantiles["0.95"]) - np.array(quantiles["0.05"])))
+
+    assert width(500) > 1.5 * width(5000)
+
+
+def test_the_twin_is_reproducible_from_the_backtest_seed(poll_series):
+    first = twin_backtest(poll_series, fixture_twin(), seed=3, runs=50)
+    again = twin_backtest(poll_series, fixture_twin(), seed=3, runs=50)
+    other = twin_backtest(poll_series, fixture_twin(), seed=4, runs=50)
+    assert first.scores["twin"] == again.scores["twin"]
+    assert first.scores["twin"] != other.scores["twin"]
