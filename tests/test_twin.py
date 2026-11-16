@@ -75,6 +75,7 @@ def test_weekly_shares_cover_every_party_and_sum_to_100():
 from dataclasses import replace  # noqa: E402
 
 from whatif.boundary import WeeklyBoundary  # noqa: E402
+from whatif.twin import FIRST_GUESS_REACTIONS  # noqa: E402
 from whatif.events import TOPICS  # noqa: E402
 
 HORIZON = 6
@@ -87,7 +88,7 @@ def quiet(**changes) -> WeeklyBoundary:
 
 
 def twin_run(boundary: WeeklyBoundary, **parameters):
-    parameters = {"influence": 0.0} | parameters
+    parameters = {"influence": 0.0, **FIRST_GUESS_REACTIONS} | parameters
     return Twin(population(), TwinParameters(**parameters), seed=0, boundary=boundary).run(LATEST, HORIZON)
 
 
@@ -174,3 +175,39 @@ def test_reaction_strengths_are_named_parameters():
 def test_the_boundary_must_cover_the_horizon():
     with pytest.raises(ValueError, match="Boundary"):
         Twin(population(), seed=0, boundary=WeeklyBoundary.quiet(2, government=GOVERNMENT)).run(LATEST, 3)
+
+
+def left_news(size: float) -> np.ndarray:
+    shock = np.zeros((HORIZON, len(PARTIES), len(TOPICS)))
+    shock[2, PARTIES.index("Left"), TOPICS.index("other")] = size
+    return shock
+
+
+def test_good_news_moves_a_small_party_as_much_as_bad_news_of_the_same_size():
+    left = PARTIES.index("Left")
+    base = twin_run(quiet()).shares[-1, left]
+    up = twin_run(quiet(event_shock=left_news(-5.0))).shares[-1, left] - base
+    down = base - twin_run(quiet(event_shock=left_news(5.0))).shares[-1, left]
+    assert up > 0 and down > 0
+    assert up == pytest.approx(down, rel=0.1)
+
+
+def test_an_economic_rise_and_an_equal_fall_move_the_government_by_the_same_amount():
+    rise, fall = quiet().economy.copy(), quiet().economy.copy()
+    rise[2:, 1] += 1.0
+    fall[2:, 1] -= 1.0
+    base = government_share(as_dict(twin_run(quiet()).shares[-1]))
+    lost = base - government_share(as_dict(twin_run(quiet(economy=rise)).shares[-1]))
+    gained = government_share(as_dict(twin_run(quiet(economy=fall)).shares[-1])) - base
+    assert lost > 0 and gained > 0
+    assert gained == pytest.approx(lost, rel=0.1)
+
+
+def test_reactions_to_the_boundary_are_off_until_calibrated():
+    economy = quiet().economy.copy()
+    economy[1:] += 2.0
+    busy = quiet(economy=economy, event_shock=afd_scandal(size=10.0))
+    run = Twin(population(), TwinParameters(influence=0.0), seed=0, boundary=busy).run(LATEST, HORIZON)
+    assert run.shares == pytest.approx(np.tile(LATEST, (HORIZON, 1)), abs=1e-9)
+    assert not TwinParameters().reacts_to_boundary
+    assert TwinParameters(**FIRST_GUESS_REACTIONS).reacts_to_boundary

@@ -61,18 +61,22 @@ def run_backtest(
     forecasters: Sequence[Forecaster],
     data_versions: dict[str, str] | None = None,
     settings: dict[str, dict] | None = None,
+    shared_noise: bool = False,
 ) -> BacktestResult:
     """Run every forecaster from the start week and score it against the real Poll Average.
 
     History is every Poll Average week before `start_week`; the Horizon is `start_week`
     and the weeks after it. Refuses to start when either is not covered by the data.
+
+    With `shared_noise`, every forecaster draws from the same random stream, so forecasters that
+    differ only in their Scenario differ only by the Scenario, not by chance.
     """
     history, actual, weeks = _split(poll_average, config)
     carried = [w for w in weeks if poll_average.carried[poll_average.index_of(w)]]
 
     scores = {}
     for index, forecaster in enumerate(forecasters):
-        rng = np.random.default_rng([config.seed, index])
+        rng = np.random.default_rng([config.seed] if shared_noise else [config.seed, index])
         samples = forecaster.forecast(history, config.horizon, config.runs, rng)
         scores[forecaster.name] = _score(samples, actual)
 

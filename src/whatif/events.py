@@ -59,6 +59,10 @@ PARTY_KEYWORDS: dict[str, tuple[str, ...]] = {
     "FDP": ("fdp", "free democrat", "free democrats", "free democratic party", "lindner"),
 }
 
+# Parties founded after 2017: their records before this day are ignored. Sahra Wagenknecht was a
+# Left politician until October 2023, so before then her name would wrongly count for BSW.
+PARTY_FOUNDED: dict[str, date] = {"BSW": date(2024, 1, 8)}
+
 # A record's topic comes from its source URL path only (actor names are GDELT's own coding and
 # say little about the policy area). The first topic, in TOPICS order, with a matching word wins.
 # A word ending in "*" matches any word it starts; the others must match a whole word.

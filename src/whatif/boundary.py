@@ -8,7 +8,7 @@ from datetime import date, timedelta
 import numpy as np
 
 from whatif.economy import Economy
-from whatif.events import TOPICS, EventLog, PageViewLog
+from whatif.events import PARTY_FOUNDED, TOPICS, EventLog, PageViewLog
 from whatif.polls import PARTIES
 from whatif.store import MissingDataError
 
@@ -85,30 +85,37 @@ def _week_index(day: date, start_week: date) -> int:
 
 
 def event_shock(log: EventLog, start_week: date, horizon: int, baseline_weeks: int) -> np.ndarray:
-    """Each party's negative news coverage per topic and Horizon week, above its usual level.
+    """Each party's news coverage per topic and Horizon week, beyond its usual level.
 
-    Negativity is articles × (−tone): more articles, or a darker tone, is worse news. The usual
-    level is the weekly average over the `baseline_weeks` before the start, so coverage the Poll
-    Average already reflects doesn't count again. The excess is divided by the party's usual
-    weekly article count (at least 1), so it reads as tone points on the party's normal volume.
+    Bad news is negative coverage (articles × −tone, over records with negative tone) above the
+    weekly average in the `baseline_weeks` before the start; good news is positive coverage above
+    its usual level, and counts as a negative shock. A quiet week is neither: less bad news than
+    usual is not good news. Coverage the Poll Average already reflects doesn't count again. The
+    excess is divided by the party's usual weekly article count (at least 1), so it reads as tone
+    points on the party's normal volume. Records about a party before it was founded are ignored.
     """
     first, last = _window(start_week, horizon, baseline_weeks)
     if not log.covers(first, last):
         raise MissingDataError(
             f"Recorded Events don't cover {first} to {last}. Run `whatif fetch-events` for that range."
         )
-    negativity = np.zeros((baseline_weeks + horizon, len(PARTIES), len(TOPICS)))
-    volume = np.zeros((baseline_weeks + horizon, len(PARTIES)))
+    weeks = baseline_weeks + horizon
+    bad, good = np.zeros((weeks, len(PARTIES), len(TOPICS))), np.zeros((weeks, len(PARTIES), len(TOPICS)))
+    volume = np.zeros((weeks, len(PARTIES)))
     for record in log.records:
         if record.party is None or not first <= record.day <= last:
             continue
+        if record.day < PARTY_FOUNDED.get(record.party, date.min):
+            continue
         week = _week_index(record.day, start_week) + baseline_weeks
         party, topic = PARTIES.index(record.party), TOPICS.index(record.topic)
-        negativity[week, party, topic] += record.articles * -record.tone
+        bad[week, party, topic] += record.articles * max(-record.tone, 0.0)
+        good[week, party, topic] += record.articles * max(record.tone, 0.0)
         volume[week, party] += record.articles
-    usual = negativity[:baseline_weeks].mean(axis=0)
+    excess_bad = np.maximum(bad[baseline_weeks:] - bad[:baseline_weeks].mean(axis=0), 0.0)
+    excess_good = np.maximum(good[baseline_weeks:] - good[:baseline_weeks].mean(axis=0), 0.0)
     usual_volume = np.maximum(volume[:baseline_weeks].mean(axis=0), 1.0)
-    return (negativity[baseline_weeks:] - usual) / usual_volume[None, :, None]
+    return (excess_bad - excess_good) / usual_volume[None, :, None]
 
 
 def attention(log: PageViewLog, start_week: date, horizon: int, baseline_weeks: int) -> tuple[np.ndarray, np.ndarray]:

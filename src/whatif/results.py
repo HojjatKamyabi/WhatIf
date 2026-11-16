@@ -11,12 +11,15 @@ from whatif.backtest import BacktestResult
 from whatif.polls import PARTIES
 
 
-def save_result(result: BacktestResult, results_dir: Path) -> Path:
-    """Write a Backtest result to its own JSON file and return the path."""
+def save_result(result: BacktestResult, results_dir: Path, kind: str = "backtest") -> Path:
+    """Write a Backtest result to its own JSON file and return the path.
+
+    `kind` starts the file name: "backtest", or "compare" for a Scenario comparison.
+    """
     results_dir.mkdir(parents=True, exist_ok=True)
     created = datetime.now(timezone.utc)
     path = results_dir / (
-        f"backtest-{result.config.start_week}-seed{result.config.seed}-{created:%Y%m%dT%H%M%SZ}.json"
+        f"{kind}-{result.config.start_week}-seed{result.config.seed}-{created:%Y%m%dT%H%M%SZ}.json"
     )
     payload = {"created_at": created.isoformat(), "parties": list(PARTIES), **asdict(result)}
     path.write_text(json.dumps(payload, indent=2, default=_encode), encoding="utf-8")

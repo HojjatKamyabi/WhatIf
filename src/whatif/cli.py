@@ -4,22 +4,23 @@ from __future__ import annotations
 
 import argparse
 import sys
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
 from whatif.backtest import BacktestConfig, run_backtest
 from whatif.baselines import NaiveBaseline, StatisticalBaseline
-from whatif.population import build_synthetic_population, fit_report
+from whatif.population import SyntheticPopulation, build_synthetic_population, fit_report
 from whatif.poll_average import PollAverage, week_of, weekly_poll_average
 from whatif.adapters import LicenceNotRecordedError, fetch, latest, snapshots
-from whatif.boundary import build_boundary
+from whatif.boundary import WeeklyBoundary, build_boundary
 from whatif.economy import INFLATION, UNEMPLOYMENT, Economy
 from whatif.elections import ELECTIONS, election_before
 from whatif.events import GDELT, PAGEVIEWS, event_log, page_view_log
 from whatif.polls import DAWUM, PARTIES, parse_dawum
 from whatif.results import save_result
-from whatif.twin import Twin, TwinParameters
+from whatif.scenarios import NO_INTERVENTION, Scenario, ScenarioError, require_reactions, scenario_named
+from whatif.twin import FIRST_GUESS_REACTIONS, Twin, TwinParameters
 from whatif.store import MissingDataError
 
 
@@ -74,12 +75,17 @@ def main(argv: list[str] | None = None) -> int:
     show.add_argument("--last", type=int, default=10, help="number of most recent weeks to show")
 
     backtest = commands.add_parser("backtest", help="run a Backtest from a past start week")
-    backtest.add_argument("--start", type=parse_week, required=True, help="start week, e.g. 2025-W10")
-    backtest.add_argument("--horizon", type=int, default=12, help="weeks ahead (default 12)")
-    backtest.add_argument("--runs", type=int, default=200)
-    backtest.add_argument("--seed", type=int, default=0)
-    backtest.add_argument("--scale", type=int, default=10000, help="eligible voters per Voter (default 10000)")
-    backtest.add_argument("--results-dir", type=Path, default=Path("results"))
+    _twin_options(backtest)
+    backtest.add_argument(
+        "--scenario", default=NO_INTERVENTION.name, help="name of the Scenario to run under (default no-intervention)"
+    )
+
+    compare = commands.add_parser(
+        "compare", help="run two Scenarios from the same start week and show them side by side"
+    )
+    _twin_options(compare)
+    compare.add_argument("first", help="the Scenario to compare against, e.g. no-intervention")
+    compare.add_argument("second", help="the Scenario to compare")
 
     args = parser.parse_args(argv)
     try:
@@ -114,10 +120,30 @@ def main(argv: list[str] | None = None) -> int:
             _print_poll_average(average, args.last)
         elif args.command == "backtest":
             _backtest(args)
-    except (MissingDataError, LicenceNotRecordedError) as error:
+        elif args.command == "compare":
+            _compare(args)
+    except (MissingDataError, LicenceNotRecordedError, ScenarioError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
     return 0
+
+
+def _twin_options(command) -> None:
+    command.add_argument("--start", type=parse_week, required=True, help="start week, e.g. 2025-W10")
+    command.add_argument("--horizon", type=int, default=12, help="weeks ahead (default 12)")
+    command.add_argument("--runs", type=int, default=200)
+    command.add_argument("--seed", type=int, default=0)
+    command.add_argument("--scale", type=int, default=10000, help="eligible voters per Voter (default 10000)")
+    command.add_argument("--results-dir", type=Path, default=Path("results"))
+    command.add_argument(
+        "--first-guess-reactions",
+        action="store_true",
+        help="let Voters react to the economy and Events with the uncalibrated first-guess strengths "
+        "(needs fetch-economy, fetch-events and fetch-attention; for exploring, not for reported scores)",
+    )
+    command.add_argument(
+        "--scenario-file", type=Path, default=Path("scenarios.toml"), help="where Scenarios are defined"
+    )
 
 
 def _population(args) -> None:
@@ -145,7 +171,28 @@ def _print_poll_average(average: PollAverage, last: int) -> None:
     print("* no poll that week; carried forward")
 
 
-def _backtest(args) -> None:
+@dataclass
+class _TwinSetup:
+    """Everything a Twin needs for one start week, before a Scenario is chosen."""
+
+    average: PollAverage
+    config: BacktestConfig
+    population: SyntheticPopulation
+    parameters: TwinParameters
+    boundary: WeeklyBoundary | None  # as recorded; None when no Voter rule uses it
+    data_versions: dict[str, str]
+    settings: dict
+
+    def twin(self, scenario: Scenario, seed: int, name: str = "twin") -> Twin:
+        require_reactions(scenario, self.parameters)
+        boundary = None if self.boundary is None else scenario.apply(self.boundary, self.config.start_week)
+        return Twin(self.population, self.parameters, seed=seed, boundary=boundary, name=name)
+
+    def twin_settings(self, scenario: Scenario) -> dict:
+        return self.settings | {"scenario": scenario.describe()}
+
+
+def _setup(args) -> _TwinSetup:
     average, version = _load_poll_average(args.data_dir)
     config = BacktestConfig(start_week=args.start, horizon=args.horizon, runs=args.runs, seed=args.seed)
 
@@ -158,41 +205,54 @@ def _backtest(args) -> None:
         scale=args.scale,
         seed=args.seed,
     )
-    parameters = TwinParameters()
+    parameters = TwinParameters(**(FIRST_GUESS_REACTIONS if args.first_guess_reactions else {}))
+    data_versions = {
+        "dawum": version,
+        election.results.name: results_snapshot.version,
+        election.structure.name: structure_snapshot.version,
+    }
 
-    inflation, unemployment = latest(INFLATION, args.data_dir), latest(UNEMPLOYMENT, args.data_dir)
-    economy = Economy(INFLATION.parse(inflation.raw()), UNEMPLOYMENT.parse(unemployment.raw()))
-    events, views = event_log(args.data_dir), page_view_log(args.data_dir)
-    boundary = build_boundary(
-        config.start_week, config.horizon, economy, events, views, parameters.event_baseline_weeks
-    )
-    twin = Twin(population, parameters, seed=args.seed, boundary=boundary)
-
-    result = run_backtest(
-        average,
-        config,
-        [NaiveBaseline(), StatisticalBaseline(), twin],
-        data_versions={
-            "dawum": version,
-            election.results.name: results_snapshot.version,
-            election.structure.name: structure_snapshot.version,
+    boundary = None
+    if parameters.reacts_to_boundary:  # only then does the Backtest need Boundary data
+        inflation, unemployment = latest(INFLATION, args.data_dir), latest(UNEMPLOYMENT, args.data_dir)
+        economy = Economy(INFLATION.parse(inflation.raw()), UNEMPLOYMENT.parse(unemployment.raw()))
+        events, views = event_log(args.data_dir), page_view_log(args.data_dir)
+        boundary = build_boundary(
+            config.start_week, config.horizon, economy, events, views, parameters.event_baseline_weeks
+        )
+        data_versions |= {
             INFLATION.name: inflation.version,
             UNEMPLOYMENT.name: unemployment.version,
             GDELT.name: "+".join(s.version for s in snapshots(GDELT, args.data_dir)),
             PAGEVIEWS.name: latest(PAGEVIEWS, args.data_dir).version,
-        },
-        settings={
-            "twin": {
-                **asdict(parameters),
-                "scale": args.scale,
-                "voters": len(population),
-                "election_day": election.day.isoformat(),
-            }
-        },
+        }
+    settings = {
+        **asdict(parameters),
+        "scale": args.scale,
+        "voters": len(population),
+        "election_day": election.day.isoformat(),
+    }
+    return _TwinSetup(average, config, population, parameters, boundary, data_versions, settings)
+
+
+def _backtest(args) -> None:
+    scenario = scenario_named(args.scenario_file, args.scenario)
+    setup = _setup(args)
+    twin = setup.twin(scenario, seed=args.seed)
+    config = setup.config
+    result = run_backtest(
+        setup.average,
+        config,
+        [NaiveBaseline(), StatisticalBaseline(), twin],
+        data_versions=setup.data_versions,
+        settings={"twin": setup.twin_settings(scenario)},
     )
     path = save_result(result, args.results_dir)
 
-    print(f"Backtest from {config.start_week}, {config.horizon} weeks, {config.runs} Runs, seed {config.seed}")
+    print(
+        f"Backtest from {config.start_week}, {config.horizon} weeks, {config.runs} Runs, seed {config.seed}, "
+        f"Scenario {scenario.name}"
+    )
     if result.carried_weeks:
         print(f"Note: {len(result.carried_weeks)} Horizon weeks had no poll and were carried forward")
     print(f"{'forecast':<12}{'CRPS':>8}{'80% coverage':>14}")
@@ -200,6 +260,37 @@ def _backtest(args) -> None:
         print(f"{name:<12}{scores.crps_mean:8.3f}{scores.coverage:14.0%}")
     print(f"Saved {path}")
 
+
+def _compare(args) -> None:
+    """Two Scenarios from the same start week: each one's Outcome Distribution per party, side by side."""
+    first, second = (scenario_named(args.scenario_file, name) for name in (args.first, args.second))
+    setup = _setup(args)
+    twins = [setup.twin(s, seed=args.seed, name=f"twin:{s.name}") for s in (first, second)]
+    config = setup.config
+    result = run_backtest(
+        setup.average,
+        config,
+        twins,
+        data_versions=setup.data_versions,
+        settings={twin.name: setup.twin_settings(s) for twin, s in zip(twins, (first, second))},
+        shared_noise=True,  # both Scenarios see the same polling noise, so differences are the Scenario's
+    )
+    path = save_result(result, args.results_dir, kind="compare")
+
+    a, b = (result.scores[t.name] for t in twins)
+    print(
+        f"Scenarios from {config.start_week}, {config.horizon} weeks, {config.runs} Runs, seed {config.seed}. "
+        f"Median and 80% interval (%) in the last Horizon week ({result.weeks[-1]}):"
+    )
+    print(f"{'party':<9}{first.name[:24]:>26}{second.name[:24]:>26}{'difference':>12}")
+    for j, party in enumerate(PARTIES):
+        cells = [
+            f"{x.quantiles['0.5'][-1][j]:5.1f} [{x.quantiles['0.1'][-1][j]:4.1f}-{x.quantiles['0.9'][-1][j]:4.1f}]"
+            for x in (a, b)
+        ]
+        difference = b.quantiles["0.5"][-1][j] - a.quantiles["0.5"][-1][j]
+        print(f"{party:<9}{cells[0]:>26}{cells[1]:>26}{difference:>+12.1f}")
+    print(f"Every week's distribution is in the saved result. Saved {path}")
 
 if __name__ == "__main__":
     sys.exit(main())

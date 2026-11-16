@@ -209,3 +209,25 @@ def test_the_contract_fixtures_are_what_collecting_the_samples_stores():
     assert GDELT.parse(GDELT.fixture.read_bytes()) == GDELT.parse(stored)
     stored = collect_pageviews(pageview_download, date(2025, 2, 3), date(2025, 2, 9))
     assert PAGEVIEWS.parse(PAGEVIEWS.fixture.read_bytes()) == PAGEVIEWS.parse(stored)
+
+
+def test_a_quiet_week_is_not_good_news():
+    records = steady_afd_coverage(range(-8, 0)) + [EventCount(START + timedelta(weeks=1), "AfD", "migration", 1, 2, -2.0)]
+    log = event_log_from(records, START - timedelta(weeks=8), START + timedelta(weeks=4))
+    shock = event_shock(log, START, horizon=4, baseline_weeks=8)
+    assert shock == pytest.approx(np.zeros_like(shock))  # less bad news than usual: no reaction at all
+
+
+def test_more_positive_coverage_than_usual_is_good_news():
+    records = steady_afd_coverage(range(-8, 4)) + [EventCount(START + timedelta(weeks=2), "AfD", "economy", 1, 20, 3.0)]
+    log = event_log_from(records, START - timedelta(weeks=8), START + timedelta(weeks=4))
+    shock = event_shock(log, START, horizon=4, baseline_weeks=8)
+    assert shock[2, AFD, TOPICS.index("economy")] == pytest.approx(-6.0)  # 20 × 3 on a usual volume of 10
+
+
+def test_events_about_a_party_before_it_was_founded_are_ignored():
+    bsw = PARTIES.index("BSW")
+    records = [EventCount(date(2021, 6, 9), "BSW", "other", 5, 50, -5.0)]
+    start = date(2021, 6, 7)
+    log = event_log_from(records, start - timedelta(weeks=8), start + timedelta(weeks=4))
+    assert not event_shock(log, start, horizon=4, baseline_weeks=8)[:, bsw].any()

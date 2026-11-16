@@ -22,6 +22,16 @@ DEFAULT_TOPIC_PRIORITIES: dict[str, tuple[float, ...]] = {
     "75+": (0.8, 1.2, 0.7, 1.2, 1.4, 1.0),
 }
 
+# The researcher's first guesses for how strongly Voters react to the Boundary. They made the
+# Twin worse in four of five scored Backtests (issues 05 and 06), so the defaults are zero until
+# the Calibration Period sets them (ADR-0004). These remain available for exploring, never for
+# reported scores.
+FIRST_GUESS_REACTIONS: dict[str, float] = {
+    "inflation_reaction": 0.01,
+    "unemployment_reaction": 0.03,
+    "event_reaction": 0.002,
+}
+
 
 @dataclass(frozen=True)
 class TwinParameters:
@@ -35,14 +45,21 @@ class TwinParameters:
     # The economy: share of a Voter's support for the governing parties that moves to the others
     # per point rise (or back, per point fall). Inflation weighs more on Voters in poorer
     # Constituencies, unemployment on Voters where it is already high (both relative to the average).
-    inflation_reaction: float = 0.01
-    unemployment_reaction: float = 0.03
+    # Off (zero) until calibrated; see FIRST_GUESS_REACTIONS.
+    inflation_reaction: float = 0.0
+    unemployment_reaction: float = 0.0
     # Events: share of a Voter's support for a party that leaves it per unit of Event shock on a
     # topic the Voter gives priority 1, at usual attention. Good news draws support the other way.
-    event_reaction: float = 0.002
+    # Off (zero) until calibrated.
+    event_reaction: float = 0.0
     event_baseline_weeks: int = 8  # weeks before the start that set each party's usual coverage
     max_attention: float = 5.0  # attention above this many times the usual level counts as this
     topic_priorities: dict[str, tuple[float, ...]] = field(default_factory=lambda: dict(DEFAULT_TOPIC_PRIORITIES))
+
+    @property
+    def reacts_to_boundary(self) -> bool:
+        """Whether any Voter rule uses the Boundary, so a Backtest needs its data."""
+        return any((self.inflation_reaction, self.unemployment_reaction, self.event_reaction))
 
 
 @dataclass(frozen=True)
@@ -59,15 +76,15 @@ class TwinRun:
 class Twin:
     """The simulated Focus Region: one Voter per group of eligible voters."""
 
-    name = "twin"
-
     def __init__(
         self,
         population: SyntheticPopulation,
         parameters: TwinParameters | None = None,
         seed: int = 0,
         boundary: WeeklyBoundary | None = None,
+        name: str = "twin",
     ):
+        self.name = name  # how the Backtest result labels this Twin, e.g. "twin:<Scenario>"
         self.parameters = parameters or TwinParameters()
         self.boundary = boundary
         self._voters = population.voters()
@@ -121,9 +138,7 @@ class Twin:
         if not pressure.any():
             return preferences
         governing = np.isin(PARTIES, list(self.boundary.government[week]))
-        national = self._national(preferences)
-        preferences = _move(preferences, governing, np.clip(pressure, 0.0, 1.0), national)
-        return _move(preferences, ~governing, np.clip(-pressure, 0.0, 1.0), national)
+        return _shift(preferences, governing, pressure, self._national(preferences))
 
     def _events(self, preferences: np.ndarray, week: int) -> np.ndarray:
         """Bad news about a party moves Voters away from it, good news towards it.
@@ -141,9 +156,7 @@ class Twin:
                 continue
             reaction = self.parameters.event_reaction * party_attention[party] * (weighted_topics @ shock)
             this_party = np.arange(len(PARTIES)) == party
-            national = self._national(preferences)
-            preferences = _move(preferences, this_party, np.clip(reaction, 0.0, 1.0), national)
-            preferences = _move(preferences, ~this_party, np.clip(-reaction, 0.0, 1.0), national)
+            preferences = _shift(preferences, this_party, reaction, self._national(preferences))
         return preferences
 
     def _disagreement(self, preferences: np.ndarray) -> float:
@@ -241,18 +254,26 @@ def _network(voters, parameters: TwinParameters, rng: np.random.Generator) -> np
     return neighbours
 
 
-def _move(preferences: np.ndarray, losing: np.ndarray, rate: np.ndarray, national: np.ndarray) -> np.ndarray:
-    """Move `rate` (per Voter) of each Voter's support for the `losing` parties to the other parties.
+def _shift(preferences: np.ndarray, parties: np.ndarray, rate: np.ndarray, national: np.ndarray) -> np.ndarray:
+    """Shrink each Voter's support for `parties` by the fraction `rate` (grow it, if negative).
 
-    It goes to the other parties in proportion to the Voter's own support for them; a Voter who
-    supports none of them follows the national shares instead.
+    Good and bad news are symmetric: a party gains the same share of its own support that the
+    same-sized bad news would cost it. Support leaving goes to the other parties in proportion
+    to the Voter's own support for them (the national shares for a Voter who supports none of
+    them); support arriving is taken from the other parties in proportion.
     """
+    rate = np.clip(rate, -1.0, 1.0)
     if not rate.any():
         return preferences
-    moved = preferences * losing * rate[:, None]
-    gaining = preferences * ~losing
-    total = gaining.sum(axis=1, keepdims=True)
-    fallback = np.where(~losing, national, 0.0)
-    fallback = fallback / fallback.sum() if fallback.sum() > 0 else (~losing) / (~losing).sum()
-    share = np.where(total > 1e-12, gaining / np.where(total > 1e-12, total, 1.0), fallback)
-    return preferences - moved + moved.sum(axis=1, keepdims=True) * share
+    own = (preferences * parties).sum(axis=1)
+    rest = 1.0 - own
+    amount = np.maximum(rate * own, -rest)  # > 0 leaves the parties, < 0 joins them
+    keep = np.where(own > 1e-12, 1.0 - amount / np.where(own > 1e-12, own, 1.0), 1.0)
+    grow = np.where(rest > 1e-12, 1.0 + amount / np.where(rest > 1e-12, rest, 1.0), 1.0)
+    shifted = preferences * np.where(parties, keep[:, None], grow[:, None])
+    stranded = (rest <= 1e-12) & (amount > 0)  # Voters with no other party to move to
+    if stranded.any():
+        target = np.where(parties, 0.0, national)
+        target = target / target.sum() if target.sum() > 0 else (~parties) / (~parties).sum()
+        shifted[stranded] += amount[stranded, None] * target
+    return shifted

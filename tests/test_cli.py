@@ -47,7 +47,7 @@ def write_boundary_store(data_dir: Path, skip: str | None = None) -> None:
         (store / "20260101T000000Z.json").write_text(json.dumps(series))
         (store / "20260101T000000Z.meta.json").write_text(json.dumps({"licence": "recorded"}))
     ranged = {
-        "gdelt-events": "day,party,topic,events,articles,tone\n2024-04-17,AfD,migration,40,400,-6.5\n",
+        "gdelt-events": "day,party,topic,events,articles,tone\n2024-04-17,AfD,migration,1,2,-1.0\n",
         "wikipedia-pageviews": "day,article,views\n2024-04-17,Alternative_für_Deutschland,9000\n",
     }
     for name, payload in ranged.items():
@@ -61,20 +61,39 @@ def write_boundary_store(data_dir: Path, skip: str | None = None) -> None:
         )
 
 
+def run_backtest_command(tmp_path, *extra: str) -> dict:
+    code = main([
+        "--data-dir", str(tmp_path / "data"), "backtest", "--start", "2024-W15",
+        "--horizon", "6", "--runs", "50", "--scale", "1000", "--results-dir", str(tmp_path / "results"), *extra,
+    ])
+    assert code == 0
+    saved = list((tmp_path / "results").glob("backtest-*.json"))
+    assert len(saved) == 1
+    return json.loads(saved[0].read_text())
+
+
 def test_backtest_command_runs_the_twin_and_saves_a_self_contained_result(tmp_path, capsys):
     write_store(tmp_path / "data")
     write_election_store(tmp_path / "data", year=2021)  # the last election before 2024-W15
-    write_boundary_store(tmp_path / "data")
-    code = main([
-        "--data-dir", str(tmp_path / "data"), "backtest", "--start", "2024-W15",
-        "--horizon", "6", "--runs", "50", "--scale", "1000", "--results-dir", str(tmp_path / "results"),
-    ])
-    assert code == 0
+    result = run_backtest_command(tmp_path)  # no Boundary data needed while reactions are off
     out = capsys.readouterr().out
     assert "naive" in out and "statistical" in out and "twin" in out
-    saved = list((tmp_path / "results").glob("backtest-*.json"))
-    assert len(saved) == 1
-    result = json.loads(saved[0].read_text())
+    assert result["data_versions"] == {
+        "dawum": "20260101T000000Z",
+        "election-results-2021": "20260101T000000Z",
+        "constituency-structure-2021": "20260101T000000Z",
+    }
+    twin = result["settings"]["twin"]
+    assert twin["influence"] == 0.1 and twin["poll_sample"] == 2000 and twin["degree"] == 10
+    assert twin["scale"] == 1000 and twin["election_day"] == "2021-09-26"
+    assert twin["inflation_reaction"] == twin["unemployment_reaction"] == twin["event_reaction"] == 0.0
+
+
+def test_first_guess_reactions_feed_the_boundary_to_the_twin_and_record_its_sources(tmp_path, capsys):
+    write_store(tmp_path / "data")
+    write_election_store(tmp_path / "data", year=2021)
+    write_boundary_store(tmp_path / "data")
+    result = run_backtest_command(tmp_path, "--first-guess-reactions")
     assert result["data_versions"] == {
         "dawum": "20260101T000000Z",
         "election-results-2021": "20260101T000000Z",
@@ -85,8 +104,6 @@ def test_backtest_command_runs_the_twin_and_saves_a_self_contained_result(tmp_pa
         "wikipedia-pageviews": "20260101T000000Z_20240101-20241231",
     }
     twin = result["settings"]["twin"]
-    assert twin["influence"] == 0.1 and twin["poll_sample"] == 2000 and twin["degree"] == 10
-    assert twin["scale"] == 1000 and twin["election_day"] == "2021-09-26"
     assert twin["unemployment_reaction"] == 0.03 and twin["event_reaction"] == 0.002
     assert twin["topic_priorities"]["18-24"] == [1.0, 0.8, 1.6, 0.8, 0.8, 1.0]
 
@@ -104,7 +121,10 @@ def test_backtest_without_boundary_data_says_what_to_fetch(tmp_path, capsys, mis
     write_store(tmp_path / "data")
     write_election_store(tmp_path / "data", year=2021)
     write_boundary_store(tmp_path / "data", skip=missing)
-    assert main(["--data-dir", str(tmp_path / "data"), "backtest", "--start", "2024-W15", "--scale", "1000"]) == 1
+    assert main([
+        "--data-dir", str(tmp_path / "data"), "backtest", "--start", "2024-W15", "--scale", "1000",
+        "--first-guess-reactions",
+    ]) == 1
     assert command in capsys.readouterr().err
 
 
@@ -115,7 +135,10 @@ def test_backtest_names_the_event_range_still_to_fetch(tmp_path, capsys):
     meta = next((tmp_path / "data" / "gdelt-events").glob("*.meta.json"))
     meta.write_text(json.dumps({"licence": "recorded", "range_start": "2024-03-01", "range_end": "2024-12-31"}))
     # 2024-W15 needs Events from eight weeks before it, from 2024-02-12, to set the usual level.
-    assert main(["--data-dir", str(tmp_path / "data"), "backtest", "--start", "2024-W15", "--scale", "1000"]) == 1
+    assert main([
+        "--data-dir", str(tmp_path / "data"), "backtest", "--start", "2024-W15", "--scale", "1000",
+        "--first-guess-reactions",
+    ]) == 1
     err = capsys.readouterr().err
     assert "fetch-events" in err and "2024-02-12" in err
 
@@ -175,3 +198,82 @@ def test_fetching_events_for_days_not_fully_published_is_refused(tmp_path, capsy
     assert main(["--data-dir", str(tmp_path), "fetch-events", "--start", "2025-01-01", "--end", today]) == 1
     assert "fully published" in capsys.readouterr().err
     assert not any(tmp_path.iterdir())
+
+
+SCENARIO_FILE = """
+[scenario.party-b-scandal]
+description = "A scandal hits Party B in week 2"
+
+[[scenario.party-b-scandal.event]]
+week = 2
+party = "AfD"
+topic = "other"
+shock = 30.0
+"""
+
+
+def scenario_setup(tmp_path: Path) -> Path:
+    write_store(tmp_path / "data")
+    write_election_store(tmp_path / "data", year=2021)
+    write_boundary_store(tmp_path / "data")
+    path = tmp_path / "scenarios.toml"
+    path.write_text(SCENARIO_FILE, encoding="utf-8")
+    return path
+
+
+def test_a_backtest_runs_under_a_named_scenario_and_records_it(tmp_path, capsys):
+    path = scenario_setup(tmp_path)
+    result = run_backtest_command(
+        tmp_path, "--first-guess-reactions", "--scenario-file", str(path), "--scenario", "party-b-scandal"
+    )
+    scenario = result["settings"]["twin"]["scenario"]
+    assert scenario["name"] == "party-b-scandal"
+    assert scenario["events"] == [{"week": 2, "party": "AfD", "topic": "other", "shock": 30.0}]
+    assert "party-b-scandal" in capsys.readouterr().out
+
+
+def test_a_backtest_without_a_scenario_records_no_intervention(tmp_path):
+    write_store(tmp_path / "data")
+    write_election_store(tmp_path / "data", year=2021)
+    assert run_backtest_command(tmp_path)["settings"]["twin"]["scenario"]["name"] == "no-intervention"
+
+
+def test_a_scenario_voters_cannot_react_to_is_refused(tmp_path, capsys):
+    path = scenario_setup(tmp_path)
+    code = main([
+        "--data-dir", str(tmp_path / "data"), "backtest", "--start", "2024-W15", "--scale", "1000",
+        "--scenario-file", str(path), "--scenario", "party-b-scandal",
+    ])
+    assert code == 1
+    err = capsys.readouterr().err
+    assert "event_reaction" in err and "--first-guess-reactions" in err
+
+
+def test_an_unknown_scenario_name_lists_the_known_ones(tmp_path, capsys):
+    path = scenario_setup(tmp_path)
+    code = main([
+        "--data-dir", str(tmp_path / "data"), "backtest", "--start", "2024-W15",
+        "--scenario-file", str(path), "--scenario", "nope",
+    ])
+    assert code == 1
+    assert "party-b-scandal" in capsys.readouterr().err
+
+
+def test_compare_shows_both_outcome_distributions_per_party_side_by_side(tmp_path, capsys):
+    path = scenario_setup(tmp_path)
+    code = main([
+        "--data-dir", str(tmp_path / "data"), "compare", "--start", "2024-W15", "--horizon", "6",
+        "--runs", "50", "--scale", "1000", "--first-guess-reactions", "--scenario-file", str(path),
+        "--results-dir", str(tmp_path / "results"), "no-intervention", "party-b-scandal",
+    ])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "no-intervention" in out and "party-b-scandal" in out
+    assert all(party in out for party in PARTIES)
+    saved = json.loads(next((tmp_path / "results").glob("compare-*.json")).read_text())
+    assert set(saved["scores"]) == {"twin:no-intervention", "twin:party-b-scandal"}
+    assert saved["settings"]["twin:party-b-scandal"]["scenario"]["name"] == "party-b-scandal"
+    afd = PARTIES.index("AfD")
+    usual = saved["scores"]["twin:no-intervention"]["quantiles"]["0.5"][-1][afd]
+    scandal = saved["scores"]["twin:party-b-scandal"]["quantiles"]["0.5"][-1][afd]
+    assert scandal < usual
