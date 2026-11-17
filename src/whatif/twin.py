@@ -23,8 +23,8 @@ DEFAULT_TOPIC_PRIORITIES: dict[str, tuple[float, ...]] = {
 }
 
 # The researcher's first guesses for how strongly Voters react to the Boundary. They made the
-# Twin worse in four of five scored Backtests (issues 05 and 06), so the defaults are zero until
-# the Calibration Period sets them (ADR-0004). These remain available for exploring, never for
+# Twin worse in four of five scored Backtests, so the defaults are zero until
+# the Calibration Period sets them. These remain available for exploring, never for
 # reported scores.
 FIRST_GUESS_REACTIONS: dict[str, float] = {
     "inflation_reaction": 0.01,

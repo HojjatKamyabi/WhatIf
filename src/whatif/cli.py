@@ -3,22 +3,25 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import asdict, dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from whatif.backtest import BacktestConfig, run_backtest
+from whatif.backtest import DEFAULT_CALIBRATION_PERIOD, BacktestConfig, CalibrationPeriod, run_backtest
 from whatif.baselines import NaiveBaseline, StatisticalBaseline
 from whatif.population import SyntheticPopulation, build_synthetic_population, fit_report
 from whatif.poll_average import PollAverage, week_of, weekly_poll_average
 from whatif.adapters import LicenceNotRecordedError, fetch, latest, snapshots
 from whatif.boundary import WeeklyBoundary, build_boundary
 from whatif.economy import INFLATION, UNEMPLOYMENT, Economy
-from whatif.elections import ELECTIONS, election_before
+from whatif.elections import ELECTIONS, election_before, national_shares
 from whatif.events import GDELT, PAGEVIEWS, event_log, page_view_log
 from whatif.polls import DAWUM, PARTIES, parse_dawum
+from whatif.plots import plot_backtest, plot_rolling
 from whatif.results import save_result
+from whatif.rolling import WindowStep, rolling_start_weeks, run_rolling
 from whatif.scenarios import NO_INTERVENTION, Scenario, ScenarioError, require_reactions, scenario_named
 from whatif.twin import FIRST_GUESS_REACTIONS, Twin, TwinParameters
 from whatif.store import MissingDataError
@@ -87,6 +90,20 @@ def main(argv: list[str] | None = None) -> int:
     compare.add_argument("first", help="the Scenario to compare against, e.g. no-intervention")
     compare.add_argument("second", help="the Scenario to compare")
 
+    rolling = commands.add_parser(
+        "rolling", help="run Backtests from many start weeks and summarise the Twin against both Baselines"
+    )
+    rolling.add_argument("--first", type=parse_week, default=parse_week("2020-W01"), help="first start week (default 2020-W01)")
+    rolling.add_argument("--last", type=parse_week, help="last start week (default: the last with a full Horizon)")
+    rolling.add_argument("--every", type=int, default=4, help="weeks between start weeks (default 4)")
+    rolling.add_argument("--horizon", type=int, default=12, help="weeks ahead (default 12)")
+    rolling.add_argument("--runs", type=int, default=200)
+    rolling.add_argument("--seed", type=int, default=0)
+    rolling.add_argument("--scale", type=int, default=10000, help="eligible voters per Voter (default 10000)")
+    rolling.add_argument("--results-dir", type=Path, default=Path("results"))
+    rolling.add_argument("--calibration-period", type=CalibrationPeriod.parse, default=DEFAULT_CALIBRATION_PERIOD,
+                         help="ISO weeks whose Twin scores never count, e.g. 2017-W01:2019-W52 (the default)")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "fetch-polls":
@@ -122,6 +139,8 @@ def main(argv: list[str] | None = None) -> int:
             _backtest(args)
         elif args.command == "compare":
             _compare(args)
+        elif args.command == "rolling":
+            _rolling(args)
     except (MissingDataError, LicenceNotRecordedError, ScenarioError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
@@ -144,6 +163,8 @@ def _twin_options(command) -> None:
     command.add_argument(
         "--scenario-file", type=Path, default=Path("scenarios.toml"), help="where Scenarios are defined"
     )
+    command.add_argument("--calibration-period", type=CalibrationPeriod.parse, default=DEFAULT_CALIBRATION_PERIOD,
+                         help="ISO weeks whose Twin scores never count, e.g. 2017-W01:2019-W52 (the default)")
 
 
 def _population(args) -> None:
@@ -246,8 +267,11 @@ def _backtest(args) -> None:
         [NaiveBaseline(), StatisticalBaseline(), twin],
         data_versions=setup.data_versions,
         settings={"twin": setup.twin_settings(scenario)},
+        calibration_period=args.calibration_period,
+        election_results=_election_results(args.data_dir, config.start_week, config.horizon),
     )
     path = save_result(result, args.results_dir)
+    plot_backtest(result, path.with_suffix(".png"))
 
     print(
         f"Backtest from {config.start_week}, {config.horizon} weeks, {config.runs} Runs, seed {config.seed}, "
@@ -255,10 +279,14 @@ def _backtest(args) -> None:
     )
     if result.carried_weeks:
         print(f"Note: {len(result.carried_weeks)} Horizon weeks had no poll and were carried forward")
+    if result.calibration:
+        print("Note: starts in the Calibration Period, so the Twin's score here is not a Twin result")
+    for election in result.elections:
+        print(f"Federal election on {election['day']} during the Horizon; its result is in the plot and the file")
     print(f"{'forecast':<12}{'CRPS':>8}{'80% coverage':>14}")
     for name, scores in result.scores.items():
         print(f"{name:<12}{scores.crps_mean:8.3f}{scores.coverage:14.0%}")
-    print(f"Saved {path}")
+    print(f"Saved {path} and its plot")
 
 
 def _compare(args) -> None:
@@ -273,6 +301,7 @@ def _compare(args) -> None:
         twins,
         data_versions=setup.data_versions,
         settings={twin.name: setup.twin_settings(s) for twin, s in zip(twins, (first, second))},
+        calibration_period=args.calibration_period,
         shared_noise=True,  # both Scenarios see the same polling noise, so differences are the Scenario's
     )
     path = save_result(result, args.results_dir, kind="compare")
@@ -291,6 +320,96 @@ def _compare(args) -> None:
         difference = b.quantiles["0.5"][-1][j] - a.quantiles["0.5"][-1][j]
         print(f"{party:<9}{cells[0]:>26}{cells[1]:>26}{difference:>+12.1f}")
     print(f"Every week's distribution is in the saved result. Saved {path}")
+
+
+def _election_results(data_dir: Path, first: date, horizon_or_last) -> dict[date, dict[str, float]]:
+    """National results of the federal elections held from `first` to the end of the window.
+
+    `horizon_or_last` is a Horizon in weeks, or the last day of the window.
+    """
+    last = horizon_or_last if isinstance(horizon_or_last, date) else first + timedelta(weeks=horizon_or_last, days=-1)
+    return {
+        e.day: national_shares(e.results.parse(latest(e.results, data_dir).raw()))
+        for e in ELECTIONS
+        if first <= e.day <= last
+    }
+
+
+def _rolling(args) -> None:
+    average, version = _load_poll_average(args.data_dir)
+    starts = rolling_start_weeks(average, args.first, args.every, args.horizon, last=args.last)
+    window_end = starts[-1] + timedelta(weeks=args.horizon, days=-1)
+    elections = _election_results(args.data_dir, starts[0], window_end)
+    parameters = TwinParameters()
+    populations: dict[date, tuple] = {}
+
+    def step(start: date) -> WindowStep:
+        election = election_before(start)
+        if election.day not in populations:
+            results, structure = latest(election.results, args.data_dir), latest(election.structure, args.data_dir)
+            population = build_synthetic_population(
+                election.results.parse(results.raw()), election.structure.parse(structure.raw()),
+                scale=args.scale, seed=args.seed,
+            )
+            populations[election.day] = (population, {
+                election.results.name: results.version, election.structure.name: structure.version,
+            })
+        population, versions = populations[election.day]
+        return WindowStep(
+            forecasters=[NaiveBaseline(), StatisticalBaseline(), Twin(population, parameters, seed=args.seed)],
+            data_versions={"dawum": version, **versions},
+            settings={"twin": {
+                **asdict(parameters), "scale": args.scale, "voters": len(population),
+                "election_day": election.day.isoformat(), "scenario": NO_INTERVENTION.describe(),
+            }},
+        )
+
+    result = run_rolling(
+        average, starts, step, horizon=args.horizon, runs=args.runs, seed=args.seed,
+        calibration_period=args.calibration_period, election_results=elections,
+    )
+
+    created = datetime.now(timezone.utc)
+    run_dir = args.results_dir / (
+        f"rolling-{starts[0]}-to-{starts[-1]}-every{args.every}-seed{args.seed}-{created:%Y%m%dT%H%M%SZ}"
+    )
+    files = []
+    for backtest in result.backtests:
+        path = save_result(backtest, run_dir)
+        plot_backtest(backtest, path.with_suffix(".png"))
+        files.append(path.name)
+    period = result.calibration_period
+    (run_dir / "summary.json").write_text(json.dumps({
+        "created_at": created.isoformat(),
+        "window": {"first": str(starts[0]), "last": str(starts[-1]), "every": args.every,
+                   "horizon": args.horizon, "runs": args.runs, "seed": args.seed, "scale": args.scale},
+        "calibration_period": [str(period.first), str(period.last)],
+        "summary": {name: asdict(row) for name, row in result.summary.items()},
+        "backtests": files,
+        "calibration_backtests": [f for f, b in zip(files, result.backtests) if b.calibration],
+    }, indent=2), encoding="utf-8")
+    plot_rolling(result, run_dir / "summary.png", elections=[e.day for e in ELECTIONS])
+
+    calibrating = sum(b.calibration for b in result.backtests)
+    print(
+        f"{len(starts)} Backtests from {starts[0]} to {starts[-1]}, every {args.every} weeks, "
+        f"{args.horizon}-week Horizon, {args.runs} Runs, seed {args.seed}"
+    )
+    if calibrating:
+        print(f"{calibrating} start in the Calibration Period ({period.first} to {period.last}): "
+              "Baselines scored there, the Twin not")
+    print(f"{'forecast':<12}{'Backtests':>10}{'mean CRPS':>11}{'80% coverage':>14}{'lowest CRPS':>13}")
+    for name, row in result.summary.items():
+        print(f"{name:<12}{row.backtests:>10}{row.crps_mean:11.3f}{row.coverage:14.0%}{row.lowest_crps:>13}")
+    twin, naive, statistical = (result.summary.get(n) for n in ("twin", "naive", "statistical"))
+    if twin and naive and statistical and twin.backtests:
+        print(
+            f"Over {twin.backtests} Backtests, the Twin's mean CRPS was {twin.crps_mean:.3f} against "
+            f"{naive.crps_mean:.3f} (naive) and {statistical.crps_mean:.3f} (statistical); "
+            f"it had the lowest CRPS in {twin.lowest_crps} of {twin.backtests}."
+        )
+    print(f"Saved {len(files)} Backtests, their plots, summary.json and summary.png in {run_dir}")
+
 
 if __name__ == "__main__":
     sys.exit(main())

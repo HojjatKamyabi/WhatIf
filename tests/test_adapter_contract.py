@@ -1,4 +1,4 @@
-"""The data adapter contract: rules every adapter must meet (spec stories 16, 67, 68)."""
+"""The data adapter contract (see whatif.adapters): rules every adapter must meet."""
 
 from dataclasses import replace
 from datetime import date

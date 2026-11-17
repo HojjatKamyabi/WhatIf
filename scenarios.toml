@@ -1,0 +1,28 @@
+# Scenarios: named sets of dated interventions for `whatif backtest --scenario NAME`
+# and `whatif compare FIRST SECOND`. "no-intervention" is built in.
+#
+# Interventions only reach Voters whose reactions are switched on; until the Calibration
+# Period sets them, run with --first-guess-reactions (for exploring, not for reported scores).
+#
+# An event is placed by Horizon `week` (1 = the start week) or by `date`. Its `shock` is an
+# Event Shock: positive is bad news for the party, negative good news. Recorded Events in a
+# busy week reach shocks of about 5 to 15. Topics: economy, migration, climate, security,
+# social, other.
+
+[scenario.party-b-scandal]
+description = "A large scandal hits Party B (AfD) in week 3"
+
+[[scenario.party-b-scandal.event]]
+week = 3
+party = "AfD"
+topic = "other"
+shock = 15.0
+
+[scenario.unemployment-shock]
+description = "Unemployment is one point higher than recorded from week 4 to week 8 (from a start of 2024-W40)"
+
+[[scenario.unemployment-shock.indicator]]
+indicator = "unemployment"
+from = 2024-10-21
+until = 2024-11-24
+value = 4.4

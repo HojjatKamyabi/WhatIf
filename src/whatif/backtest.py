@@ -19,6 +19,33 @@ COVERAGE_INTERVAL = 0.8
 
 
 @dataclass(frozen=True)
+class CalibrationPeriod:
+    """The weeks on which Voter parameters and Stand-in rules may be tuned, and only those.
+
+    A Backtest starting in it is saved marked as calibration, and its Twin scores never count
+    as a Twin result. Baselines need no tuning, so their scores there still count.
+    """
+
+    first: date  # Monday of the first week
+    last: date  # Monday of the last week
+
+    def contains(self, start_week: date) -> bool:
+        return self.first <= start_week <= self.last
+
+    @classmethod
+    def parse(cls, text: str) -> CalibrationPeriod:
+        """Read "2017-W01:2019-W52" (ISO weeks, inclusive)."""
+        first, last = (part.strip().upper().split("-W") for part in text.split(":"))
+        return cls(
+            date.fromisocalendar(int(first[0]), int(first[1]), 1),
+            date.fromisocalendar(int(last[0]), int(last[1]), 1),
+        )
+
+
+DEFAULT_CALIBRATION_PERIOD = CalibrationPeriod(date(2017, 1, 2), date(2019, 12, 23))  # 2017-W01 to 2019-W52
+
+
+@dataclass(frozen=True)
 class BacktestConfig:
     start_week: date
     horizon: int = 12
@@ -53,6 +80,8 @@ class BacktestResult:
     scores: dict[str, ForecastScores]
     data_versions: dict[str, str] = field(default_factory=dict)
     settings: dict[str, dict] = field(default_factory=dict)  # each forecaster's own settings, by name
+    calibration: bool = False  # starts in the Calibration Period: its Twin scores are not a Twin result
+    elections: list[dict] = field(default_factory=list)  # federal elections inside the Horizon: day, shares
 
 
 def run_backtest(
@@ -62,6 +91,8 @@ def run_backtest(
     data_versions: dict[str, str] | None = None,
     settings: dict[str, dict] | None = None,
     shared_noise: bool = False,
+    calibration_period: CalibrationPeriod = DEFAULT_CALIBRATION_PERIOD,
+    election_results: dict[date, dict[str, float]] | None = None,
 ) -> BacktestResult:
     """Run every forecaster from the start week and score it against the real Poll Average.
 
@@ -70,6 +101,10 @@ def run_backtest(
 
     With `shared_noise`, every forecaster draws from the same random stream, so forecasters that
     differ only in their Scenario differ only by the Scenario, not by chance.
+
+    A Backtest starting in `calibration_period` is marked as calibration. Of `election_results`
+    (national shares by election day), those held during the Horizon are reported with the
+    result, for comparison only: no forecaster sees them.
     """
     history, actual, weeks = _split(poll_average, config)
     carried = [w for w in weeks if poll_average.carried[poll_average.index_of(w)]]
@@ -88,6 +123,12 @@ def run_backtest(
         scores=scores,
         data_versions=dict(data_versions or {}),
         settings=dict(settings or {}),
+        calibration=calibration_period.contains(config.start_week),
+        elections=[
+            {"day": day, "shares": dict(shares)}
+            for day, shares in sorted((election_results or {}).items())
+            if weeks[0] <= day <= weeks[-1] + timedelta(days=6)
+        ],
     )
 
 

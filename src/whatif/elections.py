@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -238,3 +239,9 @@ def election_before(start_week: date) -> FederalElection:
     if not earlier:
         raise MissingDataError(f"No federal election registered before {start_week}.")
     return earlier[-1]
+
+
+def national_shares(results: Sequence[ConstituencyResult]) -> dict[str, float]:
+    """National party-list vote shares (%): each party's votes over all Constituencies, of all valid votes."""
+    valid = sum(r.valid for r in results)
+    return {party: 100.0 * sum(r.votes[party] for r in results) / valid for party in PARTIES}

@@ -1,3 +1,4 @@
+import socket
 from datetime import date, timedelta
 
 import numpy as np
@@ -6,6 +7,22 @@ import pytest
 from whatif.polls import PARTIES, TRACKED_PARTIES, Poll
 
 FIRST_WEEK = date(2024, 1, 1)  # a Monday
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """Tests run offline, on saved fixtures only: any attempt to reach the network fails loudly.
+
+    That keeps CI free of secrets and flaky live sources. Adapters are tested by injecting a
+    `download` function instead.
+    """
+
+    def refuse(*args, **kwargs):
+        raise RuntimeError(f"network access during tests: {args[:2]}")
+
+    monkeypatch.setattr(socket.socket, "connect", refuse)
+    monkeypatch.setattr(socket, "create_connection", refuse)
+    monkeypatch.setattr(socket, "getaddrinfo", refuse)
 
 
 def make_poll(

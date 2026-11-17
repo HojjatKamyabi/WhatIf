@@ -4,7 +4,7 @@ A Scenario changes the Boundary the Twin sees: it injects Events (as an Event Sh
 and topic in a given week) or overrides an economic indicator for a range of dates. Reaction
 strengths are not part of a Scenario; they belong to the run, so a Scenario and "no
 intervention" are always compared under the same Voter rules. Forced Party Actor moves arrive
-with the Party Actors (issue 08).
+with the Party Actors.
 
 Scenarios are written in a TOML file (default `scenarios.toml`):
 

@@ -105,3 +105,7 @@ def _normalise(samples: np.ndarray) -> np.ndarray:
     """Clip negative shares to zero and rescale every week to sum to 100."""
     samples = np.clip(samples, 0.0, None)
     return 100.0 * samples / samples.sum(axis=2, keepdims=True)
+
+
+# Baselines need no tuning, so their scores count everywhere, including the Calibration Period.
+BASELINE_NAMES: frozenset[str] = frozenset({NaiveBaseline.name, StatisticalBaseline.name})

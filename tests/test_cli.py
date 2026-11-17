@@ -277,3 +277,37 @@ def test_compare_shows_both_outcome_distributions_per_party_side_by_side(tmp_pat
     usual = saved["scores"]["twin:no-intervention"]["quantiles"]["0.5"][-1][afd]
     scandal = saved["scores"]["twin:party-b-scandal"]["quantiles"]["0.5"][-1][afd]
     assert scandal < usual
+
+
+def test_rolling_runs_a_window_and_writes_a_summary_plots_and_every_backtest(tmp_path, capsys):
+    write_store(tmp_path / "data")  # weekly polls from 2024-W01 to 2024-W30
+    write_election_store(tmp_path / "data", year=2021)
+    code = main([
+        "--data-dir", str(tmp_path / "data"), "rolling", "--first", "2024-W10", "--every", "4",
+        "--horizon", "4", "--runs", "20", "--scale", "1000", "--results-dir", str(tmp_path / "results"),
+        "--calibration-period", "2024-W10:2024-W13",
+    ])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "naive" in out and "statistical" in out and "twin" in out
+    assert "calibration period" in out.lower()
+
+    run_dir = next((tmp_path / "results").glob("rolling-*"))
+    backtests = sorted(run_dir.glob("backtest-*.json"))
+    assert [json.loads(p.read_text())["config"]["start_week"] for p in backtests] == [
+        "2024-03-04", "2024-04-01", "2024-04-29", "2024-05-27", "2024-06-24",
+    ]
+    assert len(list(run_dir.glob("backtest-*.png"))) == 5
+    assert (run_dir / "summary.png").is_file()
+    summary = json.loads((run_dir / "summary.json").read_text())
+    assert summary["calibration_period"] == ["2024-03-04", "2024-03-25"]
+    assert summary["summary"]["twin"]["backtests"] == 4  # the 2024-W10 start is in the Calibration Period
+    assert summary["summary"]["naive"]["backtests"] == 5
+    assert json.loads(backtests[0].read_text())["calibration"] is True
+
+
+def test_a_single_backtest_also_saves_its_plot(tmp_path):
+    write_store(tmp_path / "data")
+    write_election_store(tmp_path / "data", year=2021)
+    run_backtest_command(tmp_path)
+    assert len(list((tmp_path / "results").glob("backtest-*.png"))) == 1

@@ -1,8 +1,19 @@
+# Python and tooling
 .venv/
 __pycache__/
 *.egg-info/
 .pytest_cache/
-*.md
-*.toml
+
+# Downloaded data stays local: each source has its own licence, and DAWUM-derived
+# databases must stay ODbL if published. Results are regenerated from it.
 data/
 results/
+
+# Working notes: the spec, the issues and personal planning notes, kept out of the public repo.
+.scratch/
+
+# AI coding-agent setup, the working glossary and the design notes: used locally, not published.
+CLAUDE.md
+CONTEXT.md
+docs/agents/
+docs/**/*.md

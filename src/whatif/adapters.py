@@ -1,6 +1,15 @@
 """The data adapter contract: how every data source enters the local store.
 
-See docs/adapter-contract.md for the written contract and the review checklist.
+Every adapter meets these rules:
+
+1. No fetch before its licence is recorded: `fetch` refuses while `licence` is None.
+2. Provenance on every download: the snapshot records source, licence, the date the licence was
+   checked, attribution and download time.
+3. Offline after one download: Backtests read only the local store; a missing snapshot is a
+   `MissingDataError`, never a silent gap.
+4. Registered in `whatif.sources.ADAPTERS`, which gives it the shared contract test.
+5. Large sources are fetched by date range only (`collect`), and the range is recorded.
+6. Tested against a small, real, saved sample (`fixture`); tests never call the live source.
 """
 
 from __future__ import annotations
