@@ -14,7 +14,7 @@ from matplotlib.figure import Figure
 
 from whatif.backtest import BacktestResult
 from whatif.baselines import BASELINE_NAMES
-from whatif.polls import PARTIES
+from whatif.data.polls import PARTIES
 from whatif.rolling import RollingResult
 
 COLOURS = {"naive": "#8c8c8c", "statistical": "#3a6fb0", "twin": "#d9822b"}

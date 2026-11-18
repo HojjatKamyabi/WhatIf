@@ -10,9 +10,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from whatif.elections import ConstituencyResult, ConstituencyStructure
-from whatif.polls import PARTIES
-from whatif.store import MissingDataError
+from whatif.data.elections import ConstituencyResult, ConstituencyStructure
+from whatif.data.polls import PARTIES
+from whatif.data.store import MissingDataError
 
 ADULT_AGE_BANDS: tuple[str, ...] = ("18-24", "25-34", "35-59", "60-74", "75+")
 

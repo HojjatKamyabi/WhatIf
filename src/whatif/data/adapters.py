@@ -15,13 +15,15 @@ Every adapter meets these rules:
 from __future__ import annotations
 
 import json
+import time
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from whatif.store import MissingDataError, Snapshot
+from whatif.data.store import MissingDataError, Snapshot
 
 
 class LicenceNotRecordedError(RuntimeError):
@@ -132,3 +134,24 @@ def snapshots(adapter: Adapter, data_dir: Path) -> list[Snapshot]:
 
 def _meta_path(path: Path) -> Path:
     return path.with_name(path.name.removesuffix(path.suffix) + ".meta.json")
+
+
+def fetch_with_retries(download: Callable[[str], bytes], url: str, attempts: int = 4) -> bytes | None:
+    """The download, or None when the source says it doesn't exist (404).
+
+    Anything else (rate limits, timeouts, dropped connections) is retried with growing waits,
+    and raised after the last attempt.
+    """
+    for attempt in range(attempts):
+        try:
+            return download(url)
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                return None
+            if attempt == attempts - 1:
+                raise
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            if attempt == attempts - 1:
+                raise
+        time.sleep(2**attempt)
+    return None

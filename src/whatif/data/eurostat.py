@@ -14,11 +14,11 @@ from pathlib import Path
 
 import numpy as np
 
-from whatif.adapters import Adapter, Licence
-from whatif.store import MissingDataError
+from whatif.data.adapters import Adapter, Licence
+from whatif.data.store import MissingDataError
 
 _EUROSTAT = "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/"
-_FIXTURES = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "eurostat"
+_FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "eurostat"
 
 
 @dataclass(frozen=True)

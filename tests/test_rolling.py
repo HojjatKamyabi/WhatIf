@@ -8,13 +8,13 @@ import pytest
 
 from whatif.backtest import DEFAULT_CALIBRATION_PERIOD, BacktestConfig, CalibrationPeriod, run_backtest
 from whatif.baselines import NaiveBaseline, StatisticalBaseline
-from whatif.elections import national_shares, parse_results, parse_structure
+from whatif.data.elections import national_shares, parse_results, parse_structure
 from whatif.plots import plot_backtest, plot_rolling
 from whatif.poll_average import weekly_poll_average
-from whatif.polls import PARTIES
+from whatif.data.polls import PARTIES
 from whatif.population import build_synthetic_population
 from whatif.rolling import rolling_start_weeks, run_rolling
-from whatif.store import MissingDataError
+from whatif.data.store import MissingDataError
 from whatif.twin import Twin
 from tests.conftest import FIRST_WEEK
 

@@ -6,8 +6,8 @@ __pycache__/
 
 # Downloaded data stays local: each source has its own licence, and DAWUM-derived
 # databases must stay ODbL if published. Results are regenerated from it.
-data/
-results/
+/data/
+/results/
 
 # Working notes: the spec, the issues and personal planning notes, kept out of the public repo.
 .scratch/

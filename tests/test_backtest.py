@@ -7,9 +7,9 @@ import pytest
 from whatif.backtest import BacktestConfig, run_backtest
 from whatif.baselines import NaiveBaseline, StatisticalBaseline
 from whatif.poll_average import weekly_poll_average
-from whatif.polls import PARTIES
+from whatif.data.polls import PARTIES
 from whatif.results import save_result
-from whatif.store import MissingDataError
+from whatif.data.store import MissingDataError
 from tests.conftest import FIRST_WEEK, make_poll
 
 START = FIRST_WEEK + timedelta(weeks=20)
@@ -122,7 +122,7 @@ def test_saved_result_is_self_contained(poll_series, tmp_path):
 
 from pathlib import Path  # noqa: E402
 
-from whatif.elections import parse_results, parse_structure  # noqa: E402
+from whatif.data.elections import parse_results, parse_structure  # noqa: E402
 from whatif.population import build_synthetic_population  # noqa: E402
 from whatif.twin import Twin, TwinParameters  # noqa: E402
 

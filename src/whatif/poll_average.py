@@ -7,7 +7,7 @@ from datetime import date, timedelta
 
 import numpy as np
 
-from whatif.polls import PARTIES, TRACKED_PARTIES, Poll
+from whatif.data.polls import PARTIES, TRACKED_PARTIES, Poll
 
 
 def week_of(day: date) -> date:

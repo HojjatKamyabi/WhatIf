@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from whatif.elections import ELECTIONS, election_before, parse_results, parse_structure
+from whatif.data.elections import ELECTIONS, election_before, parse_results, parse_structure
 from whatif.sources import ADAPTERS
-from whatif.store import MissingDataError
+from whatif.data.store import MissingDataError
 
 FIXTURES = Path(__file__).parent / "fixtures" / "bundeswahlleiterin"
 

@@ -10,9 +10,9 @@ import numpy as np
 
 from whatif.baselines import Forecaster
 from whatif.poll_average import PollAverage, week_of
-from whatif.polls import PARTIES
+from whatif.data.polls import PARTIES
 from whatif.scoring import covered, crps
-from whatif.store import MissingDataError
+from whatif.data.store import MissingDataError
 
 QUANTILES = (0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95)
 COVERAGE_INTERVAL = 0.8
@@ -43,6 +43,21 @@ class CalibrationPeriod:
 
 
 DEFAULT_CALIBRATION_PERIOD = CalibrationPeriod(date(2017, 1, 2), date(2019, 12, 23))  # 2017-W01 to 2019-W52
+
+
+def require_tuned_outside(tuned_on: CalibrationPeriod | None, config: BacktestConfig) -> None:
+    """Refuse parameters tuned on any week this Backtest scores, so tuning can't carry hindsight in.
+
+    `tuned_on` is the period the parameters were tuned on, or None for untuned first guesses.
+    """
+    if tuned_on is None:
+        return
+    first, last = config.start_week, config.start_week + timedelta(weeks=config.horizon - 1)
+    if tuned_on.first <= last and first <= tuned_on.last:
+        raise ValueError(
+            f"Parameters tuned on {tuned_on.first} to {tuned_on.last} overlap this Backtest's weeks "
+            f"({first} to {last}); tune on the Calibration Period only."
+        )
 
 
 @dataclass(frozen=True)
@@ -82,6 +97,7 @@ class BacktestResult:
     settings: dict[str, dict] = field(default_factory=dict)  # each forecaster's own settings, by name
     calibration: bool = False  # starts in the Calibration Period: its Twin scores are not a Twin result
     elections: list[dict] = field(default_factory=list)  # federal elections inside the Horizon: day, shares
+    logs: dict[str, list] = field(default_factory=dict)  # each forecaster's decision log, if it keeps one
 
 
 def run_backtest(
@@ -109,11 +125,13 @@ def run_backtest(
     history, actual, weeks = _split(poll_average, config)
     carried = [w for w in weeks if poll_average.carried[poll_average.index_of(w)]]
 
-    scores = {}
+    scores, logs = {}, {}
     for index, forecaster in enumerate(forecasters):
         rng = np.random.default_rng([config.seed] if shared_noise else [config.seed, index])
         samples = forecaster.forecast(history, config.horizon, config.runs, rng)
         scores[forecaster.name] = _score(samples, actual)
+        if getattr(forecaster, "decision_log", None):  # Party Actor decisions, for auditing
+            logs[forecaster.name] = list(forecaster.decision_log)
 
     return BacktestResult(
         config=config,
@@ -129,6 +147,7 @@ def run_backtest(
             for day, shares in sorted((election_results or {}).items())
             if weeks[0] <= day <= weeks[-1] + timedelta(days=6)
         ],
+        logs=logs,
     )
 
 

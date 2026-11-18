@@ -4,7 +4,7 @@ from datetime import date, timedelta
 import numpy as np
 import pytest
 
-from whatif.polls import PARTIES, TRACKED_PARTIES, Poll
+from whatif.data.polls import PARTIES, TRACKED_PARTIES, Poll
 
 FIRST_WEEK = date(2024, 1, 1)  # a Monday
 

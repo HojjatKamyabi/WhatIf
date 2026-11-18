@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from whatif.elections import parse_results, parse_structure
+from whatif.data.elections import parse_results, parse_structure
 from whatif.population import build_synthetic_population, fit_report
-from whatif.store import MissingDataError
+from whatif.data.store import MissingDataError
 
 FIXTURES = Path(__file__).parent / "fixtures" / "bundeswahlleiterin"
 

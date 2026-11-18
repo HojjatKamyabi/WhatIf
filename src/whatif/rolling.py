@@ -17,7 +17,7 @@ from whatif.backtest import (
 )
 from whatif.baselines import BASELINE_NAMES, Forecaster
 from whatif.poll_average import PollAverage, week_of
-from whatif.store import MissingDataError
+from whatif.data.store import MissingDataError
 
 
 @dataclass(frozen=True)

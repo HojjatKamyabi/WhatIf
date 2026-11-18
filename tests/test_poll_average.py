@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 
 from whatif.poll_average import weekly_poll_average
-from whatif.polls import PARTIES
+from whatif.data.polls import PARTIES
 from tests.conftest import FIRST_WEEK, make_poll
 
 

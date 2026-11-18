@@ -3,8 +3,8 @@
 A Scenario changes the Boundary the Twin sees: it injects Events (as an Event Shock for a party
 and topic in a given week) or overrides an economic indicator for a range of dates. Reaction
 strengths are not part of a Scenario; they belong to the run, so a Scenario and "no
-intervention" are always compared under the same Voter rules. Forced Party Actor moves arrive
-with the Party Actors.
+intervention" are always compared under the same Voter rules. A Scenario can also force a Party
+Actor's move for a week, which overrides the Actor's own decision.
 
 Scenarios are written in a TOML file (default `scenarios.toml`):
 
@@ -22,6 +22,11 @@ Scenarios are written in a TOML file (default `scenarios.toml`):
     from = 2024-06-03
     until = 2024-06-23
     value = 6.0
+
+    [[scenario.party-b-scandal.move]]
+    week = 4            # or a date
+    party = "AfD"
+    move = "rebut"      # "emphasise <topic>", "rebut" or "hold"
 """
 
 from __future__ import annotations
@@ -33,10 +38,11 @@ from pathlib import Path
 
 import numpy as np
 
+from whatif.actors import Move
 from whatif.boundary import WeeklyBoundary
-from whatif.economy import INDICATORS
+from whatif.data.eurostat import INDICATORS
 from whatif.events import TOPICS
-from whatif.polls import TRACKED_PARTIES
+from whatif.data.polls import TRACKED_PARTIES
 
 
 class ScenarioError(ValueError):
@@ -57,6 +63,21 @@ class InjectedEvent:
     def describe(self) -> dict:
         when = {"week": self.week} if self.week is not None else {"date": self.day.isoformat()}
         return when | {"party": self.party, "topic": self.topic, "shock": self.shock}
+
+
+@dataclass(frozen=True)
+class ForcedMove:
+    party: str
+    move: Move
+    week: int | None = None  # Horizon week, 1 = the start week
+    day: date | None = None  # or a day in that week
+
+    def week_index(self, start_week: date) -> int:
+        return self.week - 1 if self.week is not None else (self.day - start_week).days // 7
+
+    def describe(self) -> dict:
+        when = {"week": self.week} if self.week is not None else {"date": self.day.isoformat()}
+        return when | {"party": self.party, "move": str(self.move)}
 
 
 @dataclass(frozen=True)
@@ -81,6 +102,7 @@ class Scenario:
     description: str
     events: tuple[InjectedEvent, ...] = ()
     indicators: tuple[IndicatorOverride, ...] = ()
+    moves: tuple[ForcedMove, ...] = ()
 
     @property
     def injects_events(self) -> bool:
@@ -89,6 +111,19 @@ class Scenario:
     @property
     def overrides_indicators(self) -> bool:
         return bool(self.indicators)
+
+    def forced_moves(self, start_week: date, horizon: int) -> dict[tuple[int, str], Move]:
+        """The moves this Scenario forces, by (Horizon week index, party). Refuses any outside the Horizon."""
+        forced = {}
+        for move in self.moves:
+            week = move.week_index(start_week)
+            if not 0 <= week < horizon:
+                raise ScenarioError(
+                    f"Scenario {self.name!r} forces a move outside the Horizon ({horizon} weeks from "
+                    f"{start_week}): {move.describe()}"
+                )
+            forced[(week, move.party)] = move.move
+        return forced
 
     def apply(self, boundary: WeeklyBoundary, start_week: date) -> WeeklyBoundary:
         """The Boundary as this Scenario has it. Refuses interventions outside the Horizon."""
@@ -126,6 +161,7 @@ class Scenario:
             "description": self.description,
             "events": [e.describe() for e in self.events],
             "indicators": [i.describe() for i in self.indicators],
+            "moves": [m.describe() for m in self.moves],
         }
 
 
@@ -133,6 +169,7 @@ NO_INTERVENTION = Scenario("no-intervention", "Nothing is changed: the Boundary 
 
 _EVENT_KEYS = {"week", "date", "party", "topic", "shock"}
 _INDICATOR_KEYS = {"indicator", "from", "until", "value"}
+_MOVE_KEYS = {"week", "date", "party", "move"}
 
 
 def load_scenarios(path: Path) -> dict[str, Scenario]:
@@ -152,6 +189,7 @@ def load_scenarios(path: Path) -> dict[str, Scenario]:
             description=str(entry.get("description", "")),
             events=tuple(_event(name, e) for e in entry.get("event", [])),
             indicators=tuple(_indicator(name, i) for i in entry.get("indicator", [])),
+            moves=tuple(_move(name, m) for m in entry.get("move", [])),
         )
     return scenarios
 
@@ -169,20 +207,40 @@ def _check_keys(scenario: str, kind: str, entry: dict, allowed: set[str]) -> Non
         raise ScenarioError(f"Scenario {scenario!r}: unknown {kind} field(s) {sorted(unknown)}.")
 
 
-def _event(scenario: str, entry: dict) -> InjectedEvent:
-    _check_keys(scenario, "event", entry, _EVENT_KEYS)
-    party, topic = entry.get("party"), entry.get("topic")
-    if party not in TRACKED_PARTIES:
-        raise ScenarioError(f"Scenario {scenario!r}: party {party!r} is not one of {', '.join(TRACKED_PARTIES)}.")
-    if topic not in TOPICS:
-        raise ScenarioError(f"Scenario {scenario!r}: topic {topic!r} is not one of {', '.join(TOPICS)}.")
+def _when(scenario: str, kind: str, entry: dict) -> tuple[int | None, date | None]:
     week, day = entry.get("week"), entry.get("date")
     if (week is None) == (day is None):
-        raise ScenarioError(f"Scenario {scenario!r}: an event needs either a week or a date, not both.")
+        raise ScenarioError(f"Scenario {scenario!r}: {kind} needs either a week or a date, not both.")
     if week is not None and (not isinstance(week, int) or week < 1):
         raise ScenarioError(f"Scenario {scenario!r}: week must be a whole number from 1, got {week!r}.")
     if day is not None and not isinstance(day, date):
         raise ScenarioError(f"Scenario {scenario!r}: date must be written like 2024-06-05, got {day!r}.")
+    return week, day
+
+
+def _party(scenario: str, party) -> str:
+    if party not in TRACKED_PARTIES:
+        raise ScenarioError(f"Scenario {scenario!r}: party {party!r} is not one of {', '.join(TRACKED_PARTIES)}.")
+    return party
+
+
+def _move(scenario: str, entry: dict) -> ForcedMove:
+    _check_keys(scenario, "move", entry, _MOVE_KEYS)
+    party = _party(scenario, entry.get("party"))
+    week, day = _when(scenario, "a move", entry)
+    try:
+        move = Move.parse(str(entry.get("move")))
+    except ValueError as error:
+        raise ScenarioError(f"Scenario {scenario!r}: {error}") from error
+    return ForcedMove(party=party, move=move, week=week, day=day)
+
+
+def _event(scenario: str, entry: dict) -> InjectedEvent:
+    _check_keys(scenario, "event", entry, _EVENT_KEYS)
+    party, topic = _party(scenario, entry.get("party")), entry.get("topic")
+    if topic not in TOPICS:
+        raise ScenarioError(f"Scenario {scenario!r}: topic {topic!r} is not one of {', '.join(TOPICS)}.")
+    week, day = _when(scenario, "an event", entry)
     if not isinstance(entry.get("shock"), int | float):
         raise ScenarioError(f"Scenario {scenario!r}: an event needs a numeric shock (positive is bad news).")
     return InjectedEvent(party=party, topic=topic, shock=float(entry["shock"]), week=week, day=day)
@@ -208,8 +266,12 @@ def require_reactions(scenario: Scenario, parameters) -> None:
         missing.append("event_reaction")
     if scenario.overrides_indicators and not (parameters.inflation_reaction or parameters.unemployment_reaction):
         missing.append("inflation_reaction or unemployment_reaction")
+    if any(m.move.kind == "emphasise" for m in scenario.moves) and not parameters.move_reaction:
+        missing.append("move_reaction")
+    if any(m.move.kind == "rebut" for m in scenario.moves) and not parameters.event_reaction:
+        missing.append("event_reaction (a rebuttal softens bad news Voters react to)")
     if missing:
         raise ScenarioError(
-            f"Scenario {scenario.name!r} changes the Boundary, but Voters don't react to it: "
+            f"Scenario {scenario.name!r} intervenes, but Voters don't react to it: "
             f"{' and '.join(missing)} is 0 until calibrated. Run with --first-guess-reactions to explore it."
         )

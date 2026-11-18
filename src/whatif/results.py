@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from whatif.backtest import BacktestResult
-from whatif.polls import PARTIES
+from whatif.data.polls import PARTIES
 
 
 def save_result(result: BacktestResult, results_dir: Path, kind: str = "backtest") -> Path:

@@ -1,10 +1,10 @@
 """Every registered data adapter. Adding an adapter here gives it the shared contract check."""
 
-from whatif.adapters import Adapter
-from whatif.economy import INFLATION, UNEMPLOYMENT
-from whatif.elections import ELECTIONS
+from whatif.data.adapters import Adapter
+from whatif.data.eurostat import INFLATION, UNEMPLOYMENT
+from whatif.data.elections import ELECTIONS
 from whatif.events import GDELT, PAGEVIEWS
-from whatif.polls import DAWUM
+from whatif.data.polls import DAWUM
 
 ADAPTERS: tuple[Adapter, ...] = (
     DAWUM,

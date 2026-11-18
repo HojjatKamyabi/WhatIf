@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from whatif.adapters import Adapter, Licence
+from whatif.data.adapters import Adapter, Licence
 
 # The fixed party list every Poll Average is expressed on. Any other party counts as Others.
 PARTIES: tuple[str, ...] = ("CDU/CSU", "AfD", "SPD", "Greens", "Left", "BSW", "FDP", "Others")
@@ -108,7 +108,7 @@ DAWUM = Adapter(
     ),
     record_type=Poll,
     parse=lambda raw: parse_dawum(json.loads(raw.decode("utf-8"))),
-    fixture=Path(__file__).parents[2] / "tests" / "fixtures" / "dawum_sample.json",
+    fixture=Path(__file__).parents[3] / "tests" / "fixtures" / "dawum_sample.json",
     describe=_describe_dawum,
     fetch_command="fetch-polls",
 )

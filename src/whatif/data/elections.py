@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
-from whatif.adapters import Adapter, Licence
-from whatif.polls import PARTIES
-from whatif.store import MissingDataError
+from whatif.data.adapters import Adapter, Licence
+from whatif.data.polls import PARTIES
+from whatif.data.store import MissingDataError
 
 # Party names in the results files, mapped onto the fixed party list. Anything else is Others.
 _PARTY_NAMES: dict[str, str] = {
@@ -153,7 +153,7 @@ def _number(text: str) -> float:
 # --- The registered elections -------------------------------------------------------------
 
 _BASE = "https://www.bundeswahlleiterin.de/dam/jcr"
-_FIXTURES = Path(__file__).parents[2] / "tests" / "fixtures" / "bundeswahlleiterin"
+_FIXTURES = Path(__file__).parents[3] / "tests" / "fixtures" / "bundeswahlleiterin"
 
 # Licence checked 2026-11-05 and signed off by the researcher. Every file states Datenlizenz
 # Deutschland – Namensnennung 2.0; the publisher's imprint (bundeswahlleiterin.de/info/impressum.html)

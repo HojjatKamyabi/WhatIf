@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from whatif.cli import main, parse_week
-from whatif.polls import PARTIES
+from whatif.data.polls import PARTIES
 
 FIRST_MONDAY = date(2024, 1, 1)
 
@@ -311,3 +311,31 @@ def test_a_single_backtest_also_saves_its_plot(tmp_path):
     write_election_store(tmp_path / "data", year=2021)
     run_backtest_command(tmp_path)
     assert len(list((tmp_path / "results").glob("backtest-*.png"))) == 1
+
+
+def test_a_backtest_with_stand_in_party_actors_records_them_and_their_decisions(tmp_path):
+    write_store(tmp_path / "data")
+    write_election_store(tmp_path / "data", year=2021)
+    write_boundary_store(tmp_path / "data")
+    result = run_backtest_command(tmp_path, "--party-actors", "stand-in")
+    twin = result["settings"]["twin"]
+    assert twin["party_actors"] == "stand-in" and twin["decision_mode"] == "shared"
+    assert twin["stand_in"]["tuned_on"] is None and twin["tuned_on"] is None  # untuned first guesses
+    assert len(result["logs"]["twin"]) == 6 * 7  # every party, every week of the 6-week Horizon
+    assert "gdelt-events" in result["data_versions"]  # Party Actors read the week's Events
+
+
+def test_party_actors_need_the_recorded_events(tmp_path, capsys):
+    write_store(tmp_path / "data")
+    write_election_store(tmp_path / "data", year=2021)
+    code = main(["--data-dir", str(tmp_path / "data"), "backtest", "--start", "2024-W15", "--party-actors", "stand-in"])
+    assert code == 1
+    assert "fetch-" in capsys.readouterr().err
+
+
+def test_a_backtest_without_party_actors_records_none(tmp_path):
+    write_store(tmp_path / "data")
+    write_election_store(tmp_path / "data", year=2021)
+    result = run_backtest_command(tmp_path)
+    assert result["settings"]["twin"]["party_actors"] == "none"
+    assert result["logs"] == {}

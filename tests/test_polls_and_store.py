@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from whatif.adapters import fetch, latest
-from whatif.polls import DAWUM, PARTIES, parse_dawum
-from whatif.store import MissingDataError
+from whatif.data.adapters import fetch, latest
+from whatif.data.polls import DAWUM, PARTIES, parse_dawum
+from whatif.data.store import MissingDataError
 
 SAMPLE = Path(__file__).parent / "fixtures" / "dawum_sample.json"
 

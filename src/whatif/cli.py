@@ -5,26 +5,33 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from whatif.backtest import DEFAULT_CALIBRATION_PERIOD, BacktestConfig, CalibrationPeriod, run_backtest
+from whatif.actors import StandIn, StandInParameters
+from whatif.backtest import (
+    DEFAULT_CALIBRATION_PERIOD,
+    BacktestConfig,
+    CalibrationPeriod,
+    require_tuned_outside,
+    run_backtest,
+)
 from whatif.baselines import NaiveBaseline, StatisticalBaseline
 from whatif.population import SyntheticPopulation, build_synthetic_population, fit_report
 from whatif.poll_average import PollAverage, week_of, weekly_poll_average
-from whatif.adapters import LicenceNotRecordedError, fetch, latest, snapshots
+from whatif.data.adapters import LicenceNotRecordedError, fetch, latest, snapshots
 from whatif.boundary import WeeklyBoundary, build_boundary
-from whatif.economy import INFLATION, UNEMPLOYMENT, Economy
-from whatif.elections import ELECTIONS, election_before, national_shares
+from whatif.data.eurostat import INFLATION, UNEMPLOYMENT, Economy
+from whatif.data.elections import ELECTIONS, election_before, national_shares
 from whatif.events import GDELT, PAGEVIEWS, event_log, page_view_log
-from whatif.polls import DAWUM, PARTIES, parse_dawum
+from whatif.data.polls import DAWUM, PARTIES, TRACKED_PARTIES, parse_dawum
 from whatif.plots import plot_backtest, plot_rolling
 from whatif.results import save_result
 from whatif.rolling import WindowStep, rolling_start_weeks, run_rolling
 from whatif.scenarios import NO_INTERVENTION, Scenario, ScenarioError, require_reactions, scenario_named
 from whatif.twin import FIRST_GUESS_REACTIONS, Twin, TwinParameters
-from whatif.store import MissingDataError
+from whatif.data.store import MissingDataError
 
 
 def parse_week(text: str) -> date:
@@ -165,6 +172,11 @@ def _twin_options(command) -> None:
     )
     command.add_argument("--calibration-period", type=CalibrationPeriod.parse, default=DEFAULT_CALIBRATION_PERIOD,
                          help="ISO weeks whose Twin scores never count, e.g. 2017-W01:2019-W52 (the default)")
+    command.add_argument(
+        "--party-actors", choices=("none", "stand-in"), default="none",
+        help="Party Actors choosing a move each week: none (default) or the rule-based stand-in "
+        "(needs fetch-economy, fetch-events and fetch-attention)",
+    )
 
 
 def _population(args) -> None:
@@ -200,14 +212,21 @@ class _TwinSetup:
     config: BacktestConfig
     population: SyntheticPopulation
     parameters: TwinParameters
-    boundary: WeeklyBoundary | None  # as recorded; None when no Voter rule uses it
+    boundary: WeeklyBoundary | None  # as recorded; None when no Voter rule or Party Actor uses it
     data_versions: dict[str, str]
     settings: dict
+    party_actors: str = "none"
+    stand_in: StandInParameters = field(default_factory=StandInParameters)
 
     def twin(self, scenario: Scenario, seed: int, name: str = "twin") -> Twin:
         require_reactions(scenario, self.parameters)
-        boundary = None if self.boundary is None else scenario.apply(self.boundary, self.config.start_week)
-        return Twin(self.population, self.parameters, seed=seed, boundary=boundary, name=name)
+        start, horizon = self.config.start_week, self.config.horizon
+        boundary = None if self.boundary is None else scenario.apply(self.boundary, start)
+        actors = {p: StandIn(self.stand_in) for p in TRACKED_PARTIES} if self.party_actors == "stand-in" else None
+        return Twin(
+            self.population, self.parameters, seed=seed, boundary=boundary, name=name,
+            actors=actors, forced_moves=scenario.forced_moves(start, horizon),
+        )
 
     def twin_settings(self, scenario: Scenario) -> dict:
         return self.settings | {"scenario": scenario.describe()}
@@ -227,6 +246,12 @@ def _setup(args) -> _TwinSetup:
         seed=args.seed,
     )
     parameters = TwinParameters(**(FIRST_GUESS_REACTIONS if args.first_guess_reactions else {}))
+    stand_in = StandInParameters()
+    for tuned in (parameters.tuned_on, stand_in.tuned_on):
+        try:
+            require_tuned_outside(tuned, config)
+        except ValueError as error:
+            raise ScenarioError(str(error)) from error
     data_versions = {
         "dawum": version,
         election.results.name: results_snapshot.version,
@@ -234,7 +259,7 @@ def _setup(args) -> _TwinSetup:
     }
 
     boundary = None
-    if parameters.reacts_to_boundary:  # only then does the Backtest need Boundary data
+    if parameters.reacts_to_boundary or args.party_actors != "none":  # only then is Boundary data needed
         inflation, unemployment = latest(INFLATION, args.data_dir), latest(UNEMPLOYMENT, args.data_dir)
         economy = Economy(INFLATION.parse(inflation.raw()), UNEMPLOYMENT.parse(unemployment.raw()))
         events, views = event_log(args.data_dir), page_view_log(args.data_dir)
@@ -252,8 +277,13 @@ def _setup(args) -> _TwinSetup:
         "scale": args.scale,
         "voters": len(population),
         "election_day": election.day.isoformat(),
+        "party_actors": args.party_actors,
     }
-    return _TwinSetup(average, config, population, parameters, boundary, data_versions, settings)
+    if args.party_actors != "none":
+        settings |= {"decision_mode": "shared", "stand_in": asdict(stand_in)}
+    return _TwinSetup(
+        average, config, population, parameters, boundary, data_versions, settings, args.party_actors, stand_in
+    )
 
 
 def _backtest(args) -> None:
@@ -361,6 +391,7 @@ def _rolling(args) -> None:
             settings={"twin": {
                 **asdict(parameters), "scale": args.scale, "voters": len(population),
                 "election_day": election.day.isoformat(), "scenario": NO_INTERVENTION.describe(),
+                "party_actors": "none",
             }},
         )
 

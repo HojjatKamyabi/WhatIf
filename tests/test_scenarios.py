@@ -8,10 +8,10 @@ import pytest
 
 from whatif.backtest import BacktestConfig, run_backtest
 from whatif.boundary import WeeklyBoundary
-from whatif.elections import parse_results, parse_structure
+from whatif.data.elections import parse_results, parse_structure
 from whatif.events import TOPICS
 from whatif.poll_average import weekly_poll_average
-from whatif.polls import PARTIES
+from whatif.data.polls import PARTIES
 from whatif.population import build_synthetic_population
 from whatif.scenarios import NO_INTERVENTION, ScenarioError, load_scenarios
 from whatif.twin import FIRST_GUESS_REACTIONS, Twin, TwinParameters

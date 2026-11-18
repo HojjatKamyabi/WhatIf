@@ -29,6 +29,8 @@ def ignored(path: str) -> bool:
         "README.md",
         "docs/headline/rolling-2020-2026.png",
         "docs/headline/summary.json",
+        "src/whatif/data/adapters.py",  # the data layer is code, not downloaded data
+        "src/whatif/data/gdelt.py",
         ".github/workflows/tests.yml",
     ],
 )

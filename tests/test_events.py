@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from whatif.adapters import fetch
+from whatif.data.adapters import fetch
 from whatif.boundary import attention, event_shock
 from whatif.events import (
     GDELT,
@@ -23,8 +23,8 @@ from whatif.events import (
     event_log,
     page_view_log,
 )
-from whatif.polls import PARTIES
-from whatif.store import MissingDataError
+from whatif.data.polls import PARTIES
+from whatif.data.store import MissingDataError
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SLOT = "http://data.gdeltproject.org/gdeltv2/20250210120000"

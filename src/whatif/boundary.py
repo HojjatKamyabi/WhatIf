@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import numpy as np
 
-from whatif.economy import Economy
+from whatif.actors import EventSummary
+from whatif.data.eurostat import Economy
 from whatif.events import PARTY_FOUNDED, TOPICS, EventLog, PageViewLog
-from whatif.polls import PARTIES
-from whatif.store import MissingDataError
+from whatif.data.polls import PARTIES
+from whatif.data.store import MissingDataError
 
 # Federal cabinets since 2013, by the day they took office: the parties Voters hold responsible
 # for the economy. The FDP left the cabinet on 2024-11-07.
@@ -38,6 +39,11 @@ class WeeklyBoundary:
     event_shock: np.ndarray  # [week][party][topic]: negative coverage above the party's usual level
     party_attention: np.ndarray  # [week][party]: page views relative to the usual level (1 = usual)
     topic_attention: np.ndarray  # [week][topic]: likewise, per topic
+    # the week's Events as structured fields, for Party Actors; empty when no Events were recorded
+    events: tuple[tuple[EventSummary, ...], ...] = field(default=())
+
+    def events_in(self, week: int) -> tuple[EventSummary, ...]:
+        return self.events[week] if week < len(self.events) else ()
 
     @property
     def horizon(self) -> int:
@@ -73,6 +79,7 @@ def build_boundary(
         event_shock=event_shock(events, start_week, horizon, baseline_weeks),
         party_attention=party_attention,
         topic_attention=topic_attention,
+        events=event_summaries(events, start_week, horizon, baseline_weeks),
     )
 
 
@@ -116,6 +123,50 @@ def event_shock(log: EventLog, start_week: date, horizon: int, baseline_weeks: i
     excess_good = np.maximum(good[baseline_weeks:] - good[:baseline_weeks].mean(axis=0), 0.0)
     usual_volume = np.maximum(volume[:baseline_weeks].mean(axis=0), 1.0)
     return (excess_bad - excess_good) / usual_volume[None, :, None]
+
+
+def event_summaries(
+    log: EventLog, start_week: date, horizon: int, baseline_weeks: int
+) -> tuple[tuple[EventSummary, ...], ...]:
+    """Each Horizon week's Events per party and topic, as the structured fields Party Actors see.
+
+    Size is the week's articles relative to the party's usual weekly count over the
+    `baseline_weeks` before the start (1 = a usual week); tone is the article-weighted average.
+    Only records that involve a party count, and none before the party was founded. Nothing of a
+    record's source (names, headlines, links) is kept.
+    """
+    first, last = _window(start_week, horizon, baseline_weeks)
+    if not log.covers(first, last):
+        raise MissingDataError(
+            f"Recorded Events don't cover {first} to {last}. Run `whatif fetch-events` for that range."
+        )
+    usual = {p: 0.0 for p in PARTIES}
+    weekly: dict[tuple[int, str, str], list[float]] = {}  # (week, party, topic) -> [articles, articles × tone]
+    for record in log.records:
+        if record.party is None or not first <= record.day <= last:
+            continue
+        if record.day < PARTY_FOUNDED.get(record.party, date.min):
+            continue
+        week = _week_index(record.day, start_week)
+        if week < 0:
+            usual[record.party] += record.articles / baseline_weeks
+            continue
+        totals = weekly.setdefault((week, record.party, record.topic), [0.0, 0.0])
+        totals[0] += record.articles
+        totals[1] += record.articles * record.tone
+    return tuple(
+        tuple(
+            EventSummary(
+                party=party,
+                topic=topic,
+                tone=round(weighted / articles, 3) if articles else 0.0,
+                size=round(articles / max(usual[party], 1.0), 3),
+            )
+            for (w, party, topic), (articles, weighted) in sorted(weekly.items())
+            if w == week
+        )
+        for week in range(horizon)
+    )
 
 
 def attention(log: PageViewLog, start_week: date, horizon: int, baseline_weeks: int) -> tuple[np.ndarray, np.ndarray]:

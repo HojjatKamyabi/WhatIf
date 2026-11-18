@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 
 from whatif.boundary import governing_parties
-from whatif.economy import INFLATION, UNEMPLOYMENT, Economy, MonthlyValue, parse_eurostat
-from whatif.store import MissingDataError
+from whatif.data.eurostat import INFLATION, UNEMPLOYMENT, Economy, MonthlyValue, parse_eurostat
+from whatif.data.store import MissingDataError
 
 FIXTURES = Path(__file__).parent / "fixtures" / "eurostat"
 

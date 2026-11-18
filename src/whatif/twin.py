@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
+from whatif.actors import ISSUE_OWNERSHIP, MENU, POLICY_TOPICS, DecisionMaker, Move, StateSummary
+from whatif.backtest import CalibrationPeriod
 from whatif.boundary import WeeklyBoundary
 from whatif.events import TOPICS
-from whatif.polls import PARTIES
+from whatif.data.polls import PARTIES, TRACKED_PARTIES
 from whatif.population import ADULT_AGE_BANDS, SyntheticPopulation
 
 # How much each adult age band cares about each topic (economy, migration, climate, security,
@@ -30,6 +33,7 @@ FIRST_GUESS_REACTIONS: dict[str, float] = {
     "inflation_reaction": 0.01,
     "unemployment_reaction": 0.03,
     "event_reaction": 0.002,
+    "move_reaction": 0.01,
 }
 
 
@@ -55,11 +59,22 @@ class TwinParameters:
     event_baseline_weeks: int = 8  # weeks before the start that set each party's usual coverage
     max_attention: float = 5.0  # attention above this many times the usual level counts as this
     topic_priorities: dict[str, tuple[float, ...]] = field(default_factory=lambda: dict(DEFAULT_TOPIC_PRIORITIES))
+    # Party Actor moves: share of a Voter's support that moves towards a party emphasising a topic
+    # the Voter cares about more than average, per unit of extra priority, at usual attention.
+    # Off (zero) until calibrated.
+    move_reaction: float = 0.0
+    owned_credibility: float = 1.0  # how much an emphasis persuades on a topic the party owns
+    other_credibility: float = 0.3  # ... and on any other topic
+    rebut_effect: float = 0.5  # share of the week's bad news about a party that a rebuttal takes away
+    tuned_on: CalibrationPeriod | None = None  # the period these were tuned on; None: untuned first guesses
 
     @property
     def reacts_to_boundary(self) -> bool:
         """Whether any Voter rule uses the Boundary, so a Backtest needs its data."""
         return any((self.inflation_reaction, self.unemployment_reaction, self.event_reaction))
+
+    def credibility(self, party: str, topic: str) -> float:
+        return self.owned_credibility if topic in ISSUE_OWNERSHIP.get(party, ()) else self.other_credibility
 
 
 @dataclass(frozen=True)
@@ -71,6 +86,7 @@ class TwinRun:
     end_by_constituency: dict[int, dict[str, float]]  # shares (%) per Constituency after the last step
     shares: np.ndarray  # national shares (%) after each weekly step: [week][party]
     disagreement: list[float]  # Neighbour Disagreement (points) at the start and after each week
+    decisions: list[dict] = field(default_factory=list)  # Party Actor decisions, with their inputs
 
 
 class Twin:
@@ -83,10 +99,15 @@ class Twin:
         seed: int = 0,
         boundary: WeeklyBoundary | None = None,
         name: str = "twin",
+        actors: Mapping[str, DecisionMaker] | None = None,
+        forced_moves: Mapping[tuple[int, str], Move] | None = None,
     ):
         self.name = name  # how the Backtest result labels this Twin, e.g. "twin:<Scenario>"
         self.parameters = parameters or TwinParameters()
         self.boundary = boundary
+        self.actors = dict(actors or {})  # party -> decision-maker; parties without one hold
+        self.forced_moves = dict(forced_moves or {})  # (Horizon week index, party) -> move, from a Scenario
+        self.decision_log: list[dict] = []  # the decisions of the last forecast (Shared Actor Decisions)
         self._voters = population.voters()
         self._neighbours = _network(self._voters, self.parameters, np.random.default_rng(seed))
         voters = self._voters
@@ -104,9 +125,10 @@ class Twin:
         preferences = self._start(np.asarray(latest, dtype=float) / np.sum(latest))
         start = 100 * self._national(preferences)
         start_by_constituency = self._by_constituency(preferences)
-        shares, disagreement = [], [self._disagreement(preferences)]
+        shares, disagreement, decisions = [], [self._disagreement(preferences)], []
         for week in range(horizon):
-            preferences = self._step(preferences, week)
+            moves = self._decide(preferences, week, decisions)
+            preferences = self._step(preferences, week, moves)
             shares.append(100 * self._national(preferences))
             disagreement.append(self._disagreement(preferences))
         return TwinRun(
@@ -115,17 +137,82 @@ class Twin:
             end_by_constituency=self._by_constituency(preferences),
             shares=np.array(shares).reshape(horizon, len(PARTIES)),
             disagreement=disagreement,
+            decisions=decisions,
         )
+
+    # --- Party Actors -----------------------------------------------------------------------
+
+    def _decide(self, preferences: np.ndarray, week: int, log: list[dict]) -> dict[str, Move]:
+        """Each party's move this week: a Scenario's forced move, else its Actor's, else hold.
+
+        Actors see a state summary only: national support at the end of last week, the week's
+        Events as structured fields, and attention per topic. Every decision is logged.
+        """
+        if not self.actors and not self.forced_moves:
+            return {}
+        support = {p: float(v) for p, v in zip(PARTIES, 100 * self._national(preferences))}
+        events = self.boundary.events_in(week) if self.boundary is not None else ()
+        attention = {
+            t: float(self.boundary.topic_attention[week, TOPICS.index(t)]) if self.boundary is not None else 1.0
+            for t in POLICY_TOPICS
+        }
+        moves = {}
+        for party in TRACKED_PARTIES:
+            actor = self.actors.get(party)
+            proposed = None
+            if actor is not None:
+                summary = StateSummary(week + 1, party, dict(support), events, dict(attention))
+                decision = actor.decide(summary, MENU)
+                if decision.move not in MENU:
+                    raise ValueError(f"{party}'s Party Actor chose {decision.move}, which is not on the menu.")
+                proposed = decision
+            forced = self.forced_moves.get((week, party))
+            if forced is None and proposed is None:
+                continue
+            move = forced or proposed.move
+            moves[party] = move
+            log.append({
+                "week": week + 1,
+                "party": party,
+                "move": str(move),
+                "reason": "forced by the Scenario" if forced else proposed.reason,
+                "forced": forced is not None,
+                "proposed": str(proposed.move) if proposed else None,
+                "state": {"support": support, "events": [asdict(e) for e in events], "topic_attention": attention},
+            })
+        return moves
 
     # --- Voter rules ------------------------------------------------------------------------
 
-    def _step(self, preferences: np.ndarray, week: int) -> np.ndarray:
-        """One week: social influence, then the economy, then the week's Events."""
+    def _step(self, preferences: np.ndarray, week: int, moves: Mapping[str, Move] | None = None) -> np.ndarray:
+        """One week: social influence, then the economy, then the week's Events, then party moves."""
+        moves = moves or {}
         influence = self.parameters.influence
         preferences = (1.0 - influence) * preferences + influence * preferences[self._neighbours].mean(axis=1)
         if self.boundary is not None:
             preferences = self._economy(preferences, week)
-            preferences = self._events(preferences, week)
+            rebutting = {p for p, m in moves.items() if m.kind == "rebut"}
+            preferences = self._events(preferences, week, rebutting)
+        return self._emphasis(preferences, week, moves)
+
+    def _emphasis(self, preferences: np.ndarray, week: int, moves: Mapping[str, Move]) -> np.ndarray:
+        """Voters who care more than average about a topic move towards a party that emphasises it,
+        the more so on a topic the party owns and the more attention the topic gets."""
+        reaction = self.parameters.move_reaction
+        if not reaction:
+            return preferences
+        for party, move in moves.items():
+            if move.kind != "emphasise":
+                continue
+            k = TOPICS.index(move.topic)
+            weight = self._topic_weight[:, k]
+            above_average = np.maximum(weight - weight.mean(), 0.0)
+            attention = 1.0
+            if self.boundary is not None:
+                attention = float(np.clip(self.boundary.topic_attention[week, k], 0.0, self.parameters.max_attention))
+            rate = -reaction * self.parameters.credibility(party, move.topic) * attention * above_average
+            this_party = np.arange(len(PARTIES)) == PARTIES.index(party)
+            preferences = _shift(preferences, this_party, rate, self._national(preferences))
         return preferences
 
     def _economy(self, preferences: np.ndarray, week: int) -> np.ndarray:
@@ -140,11 +227,12 @@ class Twin:
         governing = np.isin(PARTIES, list(self.boundary.government[week]))
         return _shift(preferences, governing, pressure, self._national(preferences))
 
-    def _events(self, preferences: np.ndarray, week: int) -> np.ndarray:
+    def _events(self, preferences: np.ndarray, week: int, rebutting: set[str] = frozenset()) -> np.ndarray:
         """Bad news about a party moves Voters away from it, good news towards it.
 
         Each Voter weighs the news by how much they care about its topic, and by how much
-        attention the party and the topic get that week.
+        attention the party and the topic get that week. A party that rebuts takes away
+        `rebut_effect` of that week's bad news about it.
         """
         cap = self.parameters.max_attention
         party_attention = np.clip(self.boundary.party_attention[week], 0.0, cap)
@@ -154,6 +242,8 @@ class Twin:
             shock = self.boundary.event_shock[week, party]
             if not shock.any():
                 continue
+            if PARTIES[party] in rebutting:
+                shock = np.where(shock > 0, shock * (1.0 - self.parameters.rebut_effect), shock)
             reaction = self.parameters.event_reaction * party_attention[party] * (weighted_topics @ shock)
             this_party = np.arange(len(PARTIES)) == party
             preferences = _shift(preferences, this_party, reaction, self._national(preferences))
@@ -177,6 +267,7 @@ class Twin:
         multinomial draw on the national shares, so Runs differ only by polling noise.
         """
         run = self.run(history[-1], horizon)
+        self.decision_log = run.decisions  # Shared Actor Decisions: one set of moves for every Run
         shares = run.shares / run.shares.sum(axis=1, keepdims=True)
         sample = self.parameters.poll_sample
         counts = rng.multinomial(sample, np.broadcast_to(shares, (runs, horizon, len(PARTIES))))

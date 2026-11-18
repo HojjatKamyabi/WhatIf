@@ -9,8 +9,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from whatif.elections import parse_results, parse_structure
-from whatif.polls import PARTIES
+from whatif.data.elections import parse_results, parse_structure
+from whatif.data.polls import PARTIES
 from whatif.population import build_synthetic_population
 from whatif.twin import Twin, TwinParameters
 

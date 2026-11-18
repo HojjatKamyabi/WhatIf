@@ -1,4 +1,4 @@
-"""The data adapter contract (see whatif.adapters): rules every adapter must meet."""
+"""The data adapter contract (see whatif.data.adapters): rules every adapter must meet."""
 
 from dataclasses import replace
 from datetime import date
@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from whatif.adapters import Adapter, Licence, LicenceNotRecordedError, fetch, latest
-from whatif.store import MissingDataError
+from whatif.data.adapters import Adapter, Licence, LicenceNotRecordedError, fetch, latest
+from whatif.data.store import MissingDataError
 
 FIXTURE = Path(__file__).parent / "fixtures" / "dawum_sample.json"
 
