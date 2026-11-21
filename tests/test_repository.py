@@ -130,3 +130,16 @@ def test_every_command_the_readme_shows_exists(command):
     with pytest.raises(SystemExit) as exit_:
         main([command, "--help"])
     assert exit_.value.code == 0
+
+
+def test_the_model_example_is_tracked_and_real_model_configs_are_not():
+    assert not ignored("models.example.toml")
+    assert ignored("models.toml")
+
+
+def test_the_model_example_parses():
+    from whatif.llm import load_models
+
+    models = load_models(ROOT / "models.example.toml")
+    assert set(models) == {"local-example", "hosted-example"}
+    assert models["hosted-example"].api_key_env == "WHATIF_MODEL_API_KEY"

@@ -1,0 +1,29 @@
+# Models for language-model Party Actors: copy this file to models.toml (git-ignored) and edit it.
+# Any OpenAI-compatible chat endpoint works: a self-hosted vLLM or SGLang server, or a hosted API.
+#
+#   whatif backtest --start 2024-W40 --party-actors language-model --model local-example
+#
+# The key is never written here: `api_key_env` names the environment variable that holds it.
+# Prices are USD per million tokens, used to report cost; use 0 for a self-hosted server.
+# The Training Cutoff and its source come from the model's published card, since the endpoint
+# can't report them; they decide each Backtest's Cutoff Label.
+
+[model.local-example]
+base_url = "http://localhost:8000/v1"
+model = "your-served-model-name"
+quantization = "full precision"
+training_cutoff = 2024-06-30
+cutoff_source = "https://example.org/your-model-card"
+input_price = 0.0
+output_price = 0.0
+temperature = 0.7
+
+[model.hosted-example]
+base_url = "https://api.example.org/v1"
+model = "provider-model-name"
+quantization = "full precision"
+training_cutoff = 2025-01-31
+cutoff_source = "https://example.org/provider-model-card"
+api_key_env = "WHATIF_MODEL_API_KEY"
+input_price = 1.0
+output_price = 4.0

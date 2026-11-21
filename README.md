@@ -52,6 +52,13 @@ whatif fetch-attention
 whatif compare --start 2024-W40 --first-guess-reactions no-intervention party-b-scandal
 ```
 
+Tune the reactions and the rule-based party agents on the Calibration Period only, then use the tuned values on later weeks. Calibration needs news data from November 2016 to 2019 (several hours of downloading; fetch it a few weeks at a time). The search takes about 20 minutes and saves every score it tried:
+
+```bash
+whatif calibrate
+whatif rolling --calibrated results/calibration-2017-01-02-to-2019-12-23-seed0-<time>.json --party-actors stand-in
+```
+
 `whatif --help` lists every command.
 
 ## Data and attribution
@@ -78,5 +85,5 @@ The polls are used under the ODbL: any database derived from them that is publis
 - Modelling real individuals or using personal data.
 - Any use aimed at influencing real voters: no message testing, targeting or campaign optimisation for real parties.
 - A web interface; output is the command line, saved results and plots.
-- Automated calibration; Voter settings are named parameters, calibrated by hand on the Calibration Period.
+- Tuning any setting on weeks that are scored; `whatif calibrate` searches the Calibration Period only, and tuned values are refused for any Backtest that overlaps it.
 - Other Target Outcomes.

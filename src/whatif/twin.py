@@ -101,13 +101,18 @@ class Twin:
         name: str = "twin",
         actors: Mapping[str, DecisionMaker] | None = None,
         forced_moves: Mapping[tuple[int, str], Move] | None = None,
+        decision_mode: str = "shared",
     ):
         self.name = name  # how the Backtest result labels this Twin, e.g. "twin:<Scenario>"
         self.parameters = parameters or TwinParameters()
         self.boundary = boundary
         self.actors = dict(actors or {})  # party -> decision-maker; parties without one hold
         self.forced_moves = dict(forced_moves or {})  # (Horizon week index, party) -> move, from a Scenario
-        self.decision_log: list[dict] = []  # the decisions of the last forecast (Shared Actor Decisions)
+        if decision_mode not in ("shared", "per-run"):
+            raise ValueError(f"decision_mode must be 'shared' or 'per-run', not {decision_mode!r}.")
+        # shared: Party Actors decide once per week for all Runs; per-run: every Run decides anew
+        self.decision_mode = decision_mode
+        self.decision_log: list[dict] = []  # the decisions of the last forecast
         self._voters = population.voters()
         self._neighbours = _network(self._voters, self.parameters, np.random.default_rng(seed))
         voters = self._voters
@@ -118,16 +123,27 @@ class Twin:
         self._topic_weight = priorities[voters.age]
         self._topic_weight[:, TOPICS.index("economy")] *= self._unemployment_weight
 
-    def run(self, latest: np.ndarray, horizon: int) -> TwinRun:
-        """Start from the election map swung to `latest` (national %), then step `horizon` weeks."""
+    def run(
+        self,
+        latest: np.ndarray,
+        horizon: int,
+        actors: Mapping[str, DecisionMaker] | None = None,
+        run_index: int | None = None,
+    ) -> TwinRun:
+        """Start from the election map swung to `latest` (national %), then step `horizon` weeks.
+
+        `actors` replaces the Twin's own Party Actors for this run (per-Run decisions); decisions
+        are then logged with `run_index`.
+        """
         if self.boundary is not None and horizon > self.boundary.horizon:
             raise ValueError(f"The Boundary covers {self.boundary.horizon} weeks, not the {horizon} asked for.")
         preferences = self._start(np.asarray(latest, dtype=float) / np.sum(latest))
         start = 100 * self._national(preferences)
         start_by_constituency = self._by_constituency(preferences)
         shares, disagreement, decisions = [], [self._disagreement(preferences)], []
+        actors = self.actors if actors is None else dict(actors)
         for week in range(horizon):
-            moves = self._decide(preferences, week, decisions)
+            moves = self._decide(preferences, week, decisions, actors, run_index)
             preferences = self._step(preferences, week, moves)
             shares.append(100 * self._national(preferences))
             disagreement.append(self._disagreement(preferences))
@@ -142,13 +158,20 @@ class Twin:
 
     # --- Party Actors -----------------------------------------------------------------------
 
-    def _decide(self, preferences: np.ndarray, week: int, log: list[dict]) -> dict[str, Move]:
+    def _decide(
+        self,
+        preferences: np.ndarray,
+        week: int,
+        log: list[dict],
+        actors: Mapping[str, DecisionMaker],
+        run_index: int | None,
+    ) -> dict[str, Move]:
         """Each party's move this week: a Scenario's forced move, else its Actor's, else hold.
 
         Actors see a state summary only: national support at the end of last week, the week's
         Events as structured fields, and attention per topic. Every decision is logged.
         """
-        if not self.actors and not self.forced_moves:
+        if not actors and not self.forced_moves:
             return {}
         support = {p: float(v) for p, v in zip(PARTIES, 100 * self._national(preferences))}
         events = self.boundary.events_in(week) if self.boundary is not None else ()
@@ -158,7 +181,7 @@ class Twin:
         }
         moves = {}
         for party in TRACKED_PARTIES:
-            actor = self.actors.get(party)
+            actor = actors.get(party)
             proposed = None
             if actor is not None:
                 summary = StateSummary(week + 1, party, dict(support), events, dict(attention))
@@ -171,7 +194,8 @@ class Twin:
                 continue
             move = forced or proposed.move
             moves[party] = move
-            log.append({
+            entry = {} if run_index is None else {"run": run_index}
+            log.append(entry | {
                 "week": week + 1,
                 "party": party,
                 "move": str(move),
@@ -266,11 +290,20 @@ class Twin:
         to their chance of voting, each naming a party from their preference. That is a
         multinomial draw on the national shares, so Runs differ only by polling noise.
         """
-        run = self.run(history[-1], horizon)
-        self.decision_log = run.decisions  # Shared Actor Decisions: one set of moves for every Run
-        shares = run.shares / run.shares.sum(axis=1, keepdims=True)
+        if self.decision_mode == "shared" or not self.actors:
+            run = self.run(history[-1], horizon)
+            self.decision_log = run.decisions  # Shared Actor Decisions: one set of moves for every Run
+            shares = np.broadcast_to(run.shares / run.shares.sum(axis=1, keepdims=True), (runs, horizon, len(PARTIES)))
+        else:  # per-Run decisions: each Run's Actors decide anew, with the Run's own seed
+            per_run, self.decision_log = [], []
+            for r in range(runs):
+                actors = {p: (a.for_run(r) if hasattr(a, "for_run") else a) for p, a in self.actors.items()}
+                run = self.run(history[-1], horizon, actors=actors, run_index=r)
+                per_run.append(run.shares / run.shares.sum(axis=1, keepdims=True))
+                self.decision_log += run.decisions
+            shares = np.stack(per_run)
         sample = self.parameters.poll_sample
-        counts = rng.multinomial(sample, np.broadcast_to(shares, (runs, horizon, len(PARTIES))))
+        counts = rng.multinomial(sample, shares)
         return 100.0 * counts / sample
 
     # --- starting state ---------------------------------------------------------------------

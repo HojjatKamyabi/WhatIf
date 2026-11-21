@@ -17,3 +17,6 @@ CLAUDE.md
 CONTEXT.md
 docs/agents/
 docs/**/*.md
+
+# Your own model endpoints; models.example.toml shows the format. Keys never go in a file.
+models.toml

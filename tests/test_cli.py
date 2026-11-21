@@ -339,3 +339,103 @@ def test_a_backtest_without_party_actors_records_none(tmp_path):
     result = run_backtest_command(tmp_path)
     assert result["settings"]["twin"]["party_actors"] == "none"
     assert result["logs"] == {}
+
+
+MODELS_FILE = """
+[model.fake]
+base_url = "http://localhost:8000/v1"
+model = "open-model-7b"
+quantization = "4-bit AWQ"
+training_cutoff = 2023-12-31
+cutoff_source = "https://example.org/model-card"
+input_price = 1.0
+output_price = 4.0
+"""
+
+
+def fake_endpoint(monkeypatch, move="emphasise economy"):
+    """Stand in for an OpenAI-compatible server: no request leaves the machine."""
+    calls = []
+
+    def post(url, body, headers):
+        calls.append(json.loads(body))
+        reply = {"move": move, "reason": "fake"}
+        return json.dumps({"choices": [{"message": {"content": json.dumps(reply)}}],
+                           "usage": {"prompt_tokens": 500, "completion_tokens": 20}}).encode()
+
+    monkeypatch.setattr("whatif.llm._post", post)
+    return calls
+
+
+def llm_backtest(tmp_path, *extra):
+    models = tmp_path / "models.toml"
+    models.write_text(MODELS_FILE, encoding="utf-8")
+    return run_backtest_command(
+        tmp_path, "--party-actors", "language-model", "--model", "fake", "--models-file", str(models), *extra
+    )
+
+
+def test_a_language_model_backtest_is_repeated_with_stand_ins_and_records_its_provenance(tmp_path, capsys, monkeypatch):
+    write_store(tmp_path / "data")
+    write_election_store(tmp_path / "data", year=2021)
+    write_boundary_store(tmp_path / "data")
+    calls = fake_endpoint(monkeypatch)
+    result = llm_backtest(tmp_path)
+    assert set(result["scores"]) == {"naive", "statistical", "twin:stand-in", "twin:language-model"}
+    assert len(calls) == 6 * 7  # Shared Actor Decisions: Horizon × parties
+    llm = result["settings"]["twin:language-model"]
+    assert llm["model"]["model"] == "open-model-7b" and llm["model"]["quantization"] == "4-bit AWQ"
+    assert llm["model"]["endpoint"] == "http://localhost:8000/v1"
+    assert llm["model"]["training_cutoff"] == "2023-12-31"
+    assert llm["cutoff_margin_months"] == 3
+    assert llm["cutoff_label"] == "After"  # 2024-04-08 is more than 3 months past 2023-12-31
+    assert llm["decision_mode"] == "shared" and result["settings"]["twin:stand-in"]["decision_mode"] == "shared"
+    assert sorted(llm["masking"]["labels"].values()) == [f"Party {c}" for c in "ABCDEFG"]
+    assert llm["usage"]["calls"] == 42 and llm["usage"]["cost_usd"] == pytest.approx(42 * (500 * 1 + 20 * 4) / 1e6)
+    out = capsys.readouterr().out
+    assert "twin:stand-in" in out and "twin:language-model" in out
+    assert "Cutoff Label: After" in out and "cost" in out.lower()
+
+
+def test_rerunning_a_language_model_backtest_makes_no_model_calls(tmp_path, monkeypatch):
+    write_store(tmp_path / "data")
+    write_election_store(tmp_path / "data", year=2021)
+    write_boundary_store(tmp_path / "data")
+    calls = fake_endpoint(monkeypatch)
+    llm_backtest(tmp_path)
+    for path in (tmp_path / "results").glob("*"):
+        path.unlink()
+    again = llm_backtest(tmp_path)
+    assert len(calls) == 42  # all from the first run
+    assert again["settings"]["twin:language-model"]["usage"]["cache_hits"] == 42
+
+
+def test_per_run_language_model_backtests_default_to_20_runs(tmp_path, monkeypatch):
+    write_store(tmp_path / "data")
+    write_election_store(tmp_path / "data", year=2021)
+    write_boundary_store(tmp_path / "data")
+    calls = fake_endpoint(monkeypatch)
+    models = tmp_path / "models.toml"
+    models.write_text(MODELS_FILE, encoding="utf-8")
+    code = main([
+        "--data-dir", str(tmp_path / "data"), "backtest", "--start", "2024-W15", "--horizon", "2", "--scale", "1000",
+        "--results-dir", str(tmp_path / "results"), "--party-actors", "language-model", "--model", "fake",
+        "--models-file", str(models), "--decision-mode", "per-run",
+    ])
+    assert code == 0
+    result = json.loads(next((tmp_path / "results").glob("backtest-*.json")).read_text())
+    assert result["config"]["runs"] == 20
+    assert len(calls) == 20 * 2 * 7
+    assert result["settings"]["twin:stand-in"]["decision_mode"] == "per-run"
+
+
+def test_a_missing_model_config_is_an_error_not_a_crash(tmp_path, capsys):
+    write_store(tmp_path / "data")
+    write_election_store(tmp_path / "data", year=2021)
+    write_boundary_store(tmp_path / "data")
+    code = main([
+        "--data-dir", str(tmp_path / "data"), "backtest", "--start", "2024-W15", "--party-actors", "language-model",
+        "--model", "fake", "--models-file", str(tmp_path / "nope.toml"),
+    ])
+    assert code == 1
+    assert "models.example.toml" in capsys.readouterr().err
